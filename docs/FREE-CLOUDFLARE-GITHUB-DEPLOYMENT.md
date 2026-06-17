@@ -38,7 +38,7 @@ MONGO_URI=mongodb+srv://velura-user:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/vel
 
 ## 3. Deploy Backend On Render Free
 
-Create a new Render Blueprint from the GitHub repo. The repo includes `render.yaml`, which creates a free Node web service called `velura-api`.
+Create a new Render Blueprint from the GitHub repo. The repo includes `render.yaml`, which creates a free Node web service called `velura-services-api`.
 
 Settings:
 

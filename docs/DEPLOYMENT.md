@@ -15,7 +15,7 @@ This project is split into a static frontend and a Node API. The free-first prod
 
 1. Create a new Render Blueprint from the GitHub repository.
 2. Use `render.yaml` from the repository root.
-3. The Blueprint creates a free Node web service called `velura-api`.
+3. The Blueprint creates a free Node web service called `velura-services-api`.
 4. If creating the service manually instead, use build command:
 
 ```bash

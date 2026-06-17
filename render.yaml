@@ -1,7 +1,7 @@
 services:
   - type: web
     runtime: node
-    name: velura-api
+    name: velura-services-api
     region: frankfurt
     plan: free
     branch: main
