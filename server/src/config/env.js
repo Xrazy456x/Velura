@@ -16,6 +16,10 @@ export const env = {
   nodeEnv: process.env.NODE_ENV || "development",
   port: Number(process.env.PORT || 5001),
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
+  clientUrls: (process.env.CLIENT_URLS || process.env.CLIENT_URL || "http://localhost:5173")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean),
   databaseDriver: process.env.DATABASE_DRIVER || "mongodb",
   databaseFallbackToFile: process.env.DATABASE_FALLBACK_TO_FILE !== "false",
   mongoUri: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/velura_crm",

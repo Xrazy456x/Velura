@@ -33,6 +33,7 @@ npm run start --workspace server
 ```env
 MONGO_URI=your-mongodb-atlas-uri
 CLIENT_URL=https://your-cloudflare-or-custom-domain
+CLIENT_URLS=https://your-cloudflare-or-custom-domain,https://www.your-custom-domain
 ```
 
 7. Deploy and verify `https://your-api.onrender.com/api/health`.

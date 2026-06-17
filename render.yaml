@@ -26,5 +26,7 @@ services:
         value: lr@veluraservices.com
       - key: CLIENT_URL
         sync: false
+      - key: CLIENT_URLS
+        sync: false
       - key: AUDIT_LOG_RETENTION_DAYS
         value: "2190"

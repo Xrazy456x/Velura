@@ -54,6 +54,7 @@ Render will prompt for secret environment variables:
 ```env
 MONGO_URI=your-mongodb-atlas-uri
 CLIENT_URL=https://your-cloudflare-pages-url.pages.dev
+CLIENT_URLS=https://your-cloudflare-pages-url.pages.dev,https://veluraservices.com,https://www.veluraservices.com
 ```
 
 The Blueprint sets `NODE_ENV`, `DATABASE_DRIVER`, `DATABASE_FALLBACK_TO_FILE`, `JWT_EXPIRES_IN`, `ADMIN_EMAILS`, and `AUDIT_LOG_RETENTION_DAYS`. Render generates `JWT_SECRET`.
