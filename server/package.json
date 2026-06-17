@@ -7,6 +7,7 @@
     "dev": "nodemon --ignore data src/server.js",
     "start": "node src/server.js",
     "seed:admin": "node src/scripts/seedAdmin.js",
+    "migrate:file-to-mongo": "node src/scripts/migrateFileToMongo.js",
     "check": "find src -name \"*.js\" -exec node --check {} \\;"
   },
   "dependencies": {
