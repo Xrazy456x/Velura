@@ -25,6 +25,7 @@ async function upsertBy(Model, filter, payload) {
       new: true,
       runValidators: true,
       setDefaultsOnInsert: true,
+      timestamps: false,
       upsert: true
     }
   );
