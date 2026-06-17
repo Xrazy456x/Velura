@@ -26,7 +26,7 @@ velura-cleaning-website/
 │   │   ├── middleware/       # JWT auth, role guards, validation, errors
 │   │   ├── models/           # User, Lead, Message, Booking, Review schemas
 │   │   ├── routes/           # REST route modules
-│   │   ├── services/         # Nodemailer and Google Places review cache
+│   │   ├── services/         # Email/SMS delivery and Google Places review cache
 │   │   ├── utils/            # Token and async helpers
 │   │   ├── app.js
 │   │   └── server.js
@@ -85,7 +85,15 @@ CLIENT_URL=http://localhost:5173
 ADMIN_EMAILS=you@example.com
 ```
 
-5. Optional email settings:
+5. Optional email settings. Resend is recommended for the live Render backend because it sends over HTTPS instead of SMTP ports:
+
+```bash
+RESEND_API_KEY=re_your_resend_api_key
+EMAIL_FROM="Velura <bookings@veluraservices.com>"
+CONTACT_TO=bookings@veluraservices.com
+```
+
+SMTP is still supported as a fallback for local testing or hosts that allow it:
 
 ```bash
 SMTP_HOST=smtp.your-provider.com
@@ -93,7 +101,6 @@ SMTP_PORT=587
 SMTP_USER=your-login
 SMTP_PASS=your-password
 SMTP_FROM="Velura <bookings@veluraservices.com>"
-CONTACT_TO=bookings@veluraservices.com
 ```
 
 6. Optional SMS settings for booking texts:
@@ -192,7 +199,7 @@ npm run start        # Start backend in production mode
 - Use a long random `JWT_SECRET`.
 - Restrict CORS with the deployed frontend URL.
 - Use MongoDB Atlas or a managed MongoDB provider.
-- Configure SMTP with a transactional email provider.
+- Configure Resend for transactional email, or SMTP on a host that allows outbound SMTP.
 - Keep Google API keys server-side only.
 - Add centralized logging and monitoring before high-traffic use.
 - Add automated tests before shipping business-critical workflows.

@@ -35,8 +35,11 @@ export const env = {
     requireTls: process.env.SMTP_REQUIRE_TLS !== "false",
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
-    from: process.env.SMTP_FROM || "Velura <bookings@veluraservices.com>",
-    contactTo: process.env.CONTACT_TO || process.env.SMTP_USER
+    from: process.env.EMAIL_FROM || process.env.SMTP_FROM || "Velura <bookings@veluraservices.com>",
+    contactTo: process.env.CONTACT_TO || process.env.SMTP_USER || "bookings@veluraservices.com"
+  },
+  resend: {
+    apiKey: process.env.RESEND_API_KEY
   },
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID,

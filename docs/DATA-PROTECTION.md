@@ -60,6 +60,6 @@ Do not keep personal data forever just because the database can. UK GDPR expects
 - Create accounts only inside the private manager dashboard.
 - Remove manager access immediately when a person no longer needs it.
 - Use strong manager passwords.
-- Keep Google, SMTP, Twilio, database, and JWT secrets in environment variables.
+- Keep Google, email provider, Twilio, database, and JWT secrets in environment variables.
 - Add a published privacy notice before launch.
 - Keep a record of processing activities and review it when the website workflow changes.

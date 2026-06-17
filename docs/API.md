@@ -196,7 +196,7 @@ Creates a booking. `leadId` is optional, so managers can create a booking from a
 
 Allowed communication preferences: `email`, `sms`, `phone`.
 
-Email uses SMTP settings. SMS uses Twilio settings. Phone-call follow-up is logged for manual action.
+Email uses Resend when `RESEND_API_KEY` is configured, with SMTP as a fallback. SMS uses Twilio settings. Phone-call follow-up is logged for manual action.
 
 `PATCH /bookings/:id/status`
 

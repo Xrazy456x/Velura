@@ -78,7 +78,7 @@ Render can host both the frontend as a static site and the API as a web service.
 - Use a long random `JWT_SECRET`.
 - Restrict `CLIENT_URL` to the deployed frontend origin.
 - Keep `GOOGLE_PLACES_API_KEY` only on the backend.
-- Configure SMTP with a real provider such as SendGrid, Postmark, Resend SMTP, Mailgun, or AWS SES.
+- Configure Resend for transactional email on Render, or SMTP on a host that allows outbound SMTP.
 - Configure Twilio environment variables if managers will send booking confirmations by text.
 - Enable database backups.
 - Add tests for auth, inquiry creation, booking creation, dashboard permissions, and status updates.

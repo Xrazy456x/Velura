@@ -59,7 +59,13 @@ CLIENT_URLS=https://your-cloudflare-pages-url.pages.dev,https://veluraservices.c
 
 The Blueprint sets `NODE_ENV`, `DATABASE_DRIVER`, `DATABASE_FALLBACK_TO_FILE`, `JWT_EXPIRES_IN`, `ADMIN_EMAILS`, and `AUDIT_LOG_RETENTION_DAYS`. Render generates `JWT_SECRET`.
 
-Leave email variables empty for the first live deploy. Render Free blocks outbound SMTP ports, so Google SMTP Relay will not work there on the free tier. We can add email later using an HTTP-based provider or a paid/backend host that allows SMTP.
+For email confirmations on Render Free, use Resend because it sends through HTTPS instead of SMTP ports:
+
+```env
+RESEND_API_KEY=re_your_resend_api_key
+EMAIL_FROM=Velura <bookings@veluraservices.com>
+CONTACT_TO=bookings@veluraservices.com
+```
 
 After deploy, test:
 
@@ -133,15 +139,15 @@ CLIENT_URL=https://veluraservices.com
 VITE_API_URL=https://your-render-service.onrender.com/api
 ```
 
-## 7. Email Later
+## 7. Email Setup
 
 Current Google SMTP Relay config is useful for local testing or hosts that allow SMTP.
 
-For the free Render backend, use one of these later:
+For the free Render backend, use one of these HTTPS-based providers:
 
 - Resend API
 - SendGrid API
 - Mailgun API
 - Postmark API
 
-These use HTTPS instead of SMTP ports, so they work more reliably on free hosts.
+The app supports Resend directly through `RESEND_API_KEY`. See `docs/EMAIL-SETUP.md`.

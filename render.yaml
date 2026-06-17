@@ -28,5 +28,11 @@ services:
         sync: false
       - key: CLIENT_URLS
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: "Velura <bookings@veluraservices.com>"
+      - key: CONTACT_TO
+        value: bookings@veluraservices.com
       - key: AUDIT_LOG_RETENTION_DAYS
         value: "2190"

@@ -96,7 +96,7 @@ async function attemptTeamNotification(booking, eventLabel) {
     return await sendBookingTeamNotification(booking, eventLabel);
   } catch (error) {
     console.error("Internal booking notification failed:", error);
-    return { sent: false, status: "failed", reason: "Internal email failed. Check SMTP settings." };
+    return { sent: false, status: "failed", reason: "Internal email failed. Check email provider settings." };
   }
 }
 
