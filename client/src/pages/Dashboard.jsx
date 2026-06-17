@@ -200,6 +200,7 @@ export default function Dashboard() {
   const [bookingStatus, setBookingStatus] = useState("idle");
   const [bookingAction, setBookingAction] = useState("idle");
   const [editingBookingId, setEditingBookingId] = useState("");
+  const [bookingFocusDate, setBookingFocusDate] = useState("");
   const [managerForm, setManagerForm] = useState(initialManagerForm);
   const [managerStatus, setManagerStatus] = useState("idle");
   const [passwordForm, setPasswordForm] = useState(initialPasswordForm);
@@ -373,6 +374,7 @@ export default function Dashboard() {
           ? current.map((booking) => (booking._id === editingBookingId ? data.booking : booking))
           : [data.booking, ...current]
       );
+      setBookingFocusDate(data.booking.scheduledFor);
       setBookingForm(createInitialBookingForm());
       setEditingBookingId("");
       setBookingStatus("success");
@@ -757,6 +759,7 @@ export default function Dashboard() {
               deletedBookings={deletedBookings}
               editingBookingId={editingBookingId}
               employees={employees}
+              focusDate={bookingFocusDate}
               leads={leads}
               form={bookingForm}
               status={bookingStatus}
@@ -1113,6 +1116,7 @@ function BookingPanel({
   deletedBookings,
   editingBookingId,
   employees,
+  focusDate,
   leads,
   form,
   status,
@@ -1150,6 +1154,21 @@ function BookingPanel({
     [bookings]
   );
   const selectedBookings = bookingsByDate[selectedDateKey] || [];
+
+  useEffect(() => {
+    if (!focusDate) {
+      return;
+    }
+
+    const nextSelectedDate = new Date(focusDate);
+
+    if (Number.isNaN(nextSelectedDate.getTime())) {
+      return;
+    }
+
+    setSelectedDate(nextSelectedDate);
+    setVisibleMonth(startOfMonth(nextSelectedDate));
+  }, [focusDate]);
 
   function selectCalendarDay(day) {
     setSelectedDate(day);
