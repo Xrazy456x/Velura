@@ -1,0 +1,30 @@
+services:
+  - type: web
+    runtime: node
+    name: velura-api
+    region: frankfurt
+    plan: free
+    branch: main
+    buildCommand: npm install
+    startCommand: npm run start --workspace server
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_DRIVER
+        value: mongodb
+      - key: DATABASE_FALLBACK_TO_FILE
+        value: "false"
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: ADMIN_EMAILS
+        value: lr@veluraservices.com
+      - key: CLIENT_URL
+        sync: false
+      - key: AUDIT_LOG_RETENTION_DAYS
+        value: "2190"

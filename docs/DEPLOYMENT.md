@@ -13,22 +13,28 @@ This project is split into a static frontend and a Node API. The free-first prod
 
 ### 2. Backend on Render
 
-1. Create a new Render Web Service.
-2. Use the repository root as the source.
-3. Build command:
+1. Create a new Render Blueprint from the GitHub repository.
+2. Use `render.yaml` from the repository root.
+3. The Blueprint creates a free Node web service called `velura-api`.
+4. If creating the service manually instead, use build command:
 
 ```bash
 npm install
 ```
 
-4. Start command:
+5. Start command:
 
 ```bash
 npm run start --workspace server
 ```
 
-5. Add environment variables from `server/.env.example`.
-6. Set `CLIENT_URL` to your deployed Vercel frontend URL.
+6. Add the secret environment variables:
+
+```env
+MONGO_URI=your-mongodb-atlas-uri
+CLIENT_URL=https://your-cloudflare-or-custom-domain
+```
+
 7. Deploy and verify `https://your-api.onrender.com/api/health`.
 
 ### 3. Frontend on Cloudflare Pages

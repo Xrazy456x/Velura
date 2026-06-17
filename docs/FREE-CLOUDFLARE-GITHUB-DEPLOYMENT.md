@@ -38,32 +38,25 @@ MONGO_URI=mongodb+srv://velura-user:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/vel
 
 ## 3. Deploy Backend On Render Free
 
-Create a new Render Web Service from the GitHub repo.
+Create a new Render Blueprint from the GitHub repo. The repo includes `render.yaml`, which creates a free Node web service called `velura-api`.
 
 Settings:
 
 ```text
-Runtime: Node
-Root Directory: leave blank
-Build Command: npm install
-Start Command: npm run start --workspace server
-Instance Type: Free
-Health Check Path: /api/health
+New: Blueprint
+Repository: Xrazy456x/Velura
+Branch: main
+Blueprint file: render.yaml
 ```
 
-Environment variables:
+Render will prompt for secret environment variables:
 
 ```env
-NODE_ENV=production
-DATABASE_DRIVER=mongodb
-DATABASE_FALLBACK_TO_FILE=false
 MONGO_URI=your-mongodb-atlas-uri
-JWT_SECRET=use-a-long-random-secret
-JWT_EXPIRES_IN=7d
-ADMIN_EMAILS=lr@veluraservices.com
 CLIENT_URL=https://your-cloudflare-pages-url.pages.dev
-AUDIT_LOG_RETENTION_DAYS=2190
 ```
+
+The Blueprint sets `NODE_ENV`, `DATABASE_DRIVER`, `DATABASE_FALLBACK_TO_FILE`, `JWT_EXPIRES_IN`, `ADMIN_EMAILS`, and `AUDIT_LOG_RETENTION_DAYS`. Render generates `JWT_SECRET`.
 
 Leave email variables empty for the first live deploy. Render Free blocks outbound SMTP ports, so Google SMTP Relay will not work there on the free tier. We can add email later using an HTTP-based provider or a paid/backend host that allows SMTP.
 
