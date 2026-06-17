@@ -212,6 +212,16 @@ export default function Dashboard() {
 
   const isAdmin = user?.role === "admin";
 
+  async function loadBookingRecords() {
+    const [bookingsResponse, deletedBookingsResponse] = await Promise.all([
+      apiClient.get("/bookings"),
+      apiClient.get("/bookings/deleted")
+    ]);
+
+    setBookings(bookingsResponse.data.bookings || []);
+    setDeletedBookings(deletedBookingsResponse.data.bookings || []);
+  }
+
   async function loadDashboard() {
     setStatus("loading");
     setError("");
@@ -378,6 +388,7 @@ export default function Dashboard() {
       setBookingForm(createInitialBookingForm());
       setEditingBookingId("");
       setBookingStatus("success");
+      await loadBookingRecords();
       await loadAuditEvents();
     } catch (requestError) {
       setBookingStatus("error");
