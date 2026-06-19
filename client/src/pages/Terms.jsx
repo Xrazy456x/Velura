@@ -32,7 +32,7 @@ const sections = [
   },
   {
     title: "Website and manager portal",
-    body: "The website, quote calculator, and manager portal are provided to help organise inquiries, bookings, employees, and messages. Access to manager tools is restricted to authorised accounts."
+    body: "The website, quote calculator, and manager portal are provided to help organise inquiries, quote reviews, bookings, and employees. Access to manager tools is restricted to authorised accounts."
   }
 ];
 

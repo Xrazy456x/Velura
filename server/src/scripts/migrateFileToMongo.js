@@ -6,6 +6,7 @@ import Booking from "../models/Booking.js";
 import Employee from "../models/Employee.js";
 import Lead from "../models/Lead.js";
 import Message from "../models/Message.js";
+import QuoteRequest from "../models/QuoteRequest.js";
 import Review from "../models/Review.js";
 import User from "../models/User.js";
 import { fileStorePath } from "../services/fileStore.js";
@@ -49,6 +50,7 @@ async function main() {
     users: 0,
     leads: 0,
     messages: 0,
+    quoteRequests: 0,
     employees: 0,
     bookings: 0,
     reviews: 0,
@@ -135,6 +137,33 @@ async function main() {
       }
     );
     counts.messages += 1;
+  }
+
+  for (const quoteRequest of database.quoteRequests || []) {
+    await upsertBy(
+      QuoteRequest,
+      {
+        quoteReference: quoteRequest.quoteReference
+      },
+      {
+        quoteReference: quoteRequest.quoteReference,
+        clientName: quoteRequest.clientName,
+        email: quoteRequest.email,
+        phone: quoteRequest.phone,
+        address: quoteRequest.address || "",
+        preferredDate: quoteRequest.preferredDate || "",
+        preferredTime: quoteRequest.preferredTime || "",
+        accessInstructions: quoteRequest.accessInstructions || "",
+        parkingNotes: quoteRequest.parkingNotes || "",
+        quoteNotes: quoteRequest.quoteNotes || "",
+        status: quoteRequest.status || "new",
+        quoteInput: quoteRequest.quoteInput,
+        quoteResult: quoteRequest.quoteResult,
+        createdAt: asDate(quoteRequest.createdAt),
+        updatedAt: asDate(quoteRequest.updatedAt)
+      }
+    );
+    counts.quoteRequests += 1;
   }
 
   for (const booking of database.bookings || []) {

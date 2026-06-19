@@ -15,7 +15,6 @@ import {
   UsersRound
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { apiClient, getApiError } from "../api/client.js";
 import { site } from "../config/site.js";
 
@@ -126,8 +125,10 @@ const initialForm = {
   addOnAreas: 1,
   preferredDate: "",
   preferredTime: "",
+  address: "",
   accessInstructions: "",
   parkingNotes: "",
+  quoteNotes: "",
   clientName: "",
   email: "",
   phone: ""
@@ -171,6 +172,9 @@ export default function Quote() {
   const [quote, setQuote] = useState(null);
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState("");
+  const [quoteSubmitStatus, setQuoteSubmitStatus] = useState("idle");
+  const [quoteSubmitError, setQuoteSubmitError] = useState("");
+  const [submittedReference, setSubmittedReference] = useState("");
 
   const selectedService = serviceOptions.find((service) => service.key === form.serviceType) || serviceOptions[0];
   const workspaceMode = isWorkspaceService(form.serviceType);
@@ -219,6 +223,8 @@ export default function Quote() {
   }, [payload]);
 
   function updateField(name, value) {
+    setQuoteSubmitStatus("idle");
+    setQuoteSubmitError("");
     setForm((current) => ({
       ...current,
       [name]: value
@@ -250,6 +256,33 @@ export default function Quote() {
 
   function previousStep() {
     setActiveStep((current) => Math.max(current - 1, 0));
+  }
+
+  async function submitQuoteRequest() {
+    setQuoteSubmitStatus("submitting");
+    setQuoteSubmitError("");
+    setSubmittedReference("");
+
+    try {
+      const { data } = await apiClient.post("/quote/requests", {
+        clientName: form.clientName,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
+        preferredDate: form.preferredDate,
+        preferredTime: form.preferredTime,
+        accessInstructions: form.accessInstructions,
+        parkingNotes: form.parkingNotes,
+        quoteNotes: form.quoteNotes,
+        quoteInput: payload
+      });
+
+      setSubmittedReference(data.quoteRequest?.quoteReference || "");
+      setQuoteSubmitStatus("success");
+    } catch (requestError) {
+      setQuoteSubmitStatus("error");
+      setQuoteSubmitError(getApiError(requestError, "Your quote request could not be sent."));
+    }
   }
 
   return (
@@ -492,6 +525,15 @@ export default function Quote() {
                 <section className="grid gap-5">
                   <StepTitle icon={KeyRound} eyebrow="Step 5 of 8" title="Access and parking" />
                   <label className="grid gap-2 text-sm font-bold text-coal">
+                    Property address
+                    <input
+                      className="input-field"
+                      value={form.address}
+                      onChange={(event) => updateField("address", event.target.value)}
+                      placeholder="Full address or area, for example Canary Wharf, London"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-bold text-coal">
                     Access instructions
                     <textarea
                       className="input-field min-h-32 resize-none"
@@ -530,6 +572,15 @@ export default function Quote() {
                       Phone
                       <input className="input-field" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
                     </label>
+                    <label className="grid gap-2 text-sm font-bold text-coal sm:col-span-2">
+                      Extra notes
+                      <textarea
+                        className="input-field min-h-28 resize-none"
+                        value={form.quoteNotes}
+                        onChange={(event) => updateField("quoteNotes", event.target.value)}
+                        placeholder="Anything we should check before confirming the final price."
+                      />
+                    </label>
                   </div>
                 </section>
               )}
@@ -538,13 +589,24 @@ export default function Quote() {
                 <section className="grid gap-5">
                   <StepTitle icon={CheckCircle2} eyebrow="Step 8 of 8" title="Ready to send" />
                   <div className="rounded-lg bg-mist p-4 text-sm font-semibold leading-6 text-stone-700">
-                    Your quote is prepared. Send the inquiry from the contact page and include any access or parking notes
-                    so Velura can confirm the scope and final booking details.
+                    Your quote request will go straight to the Velura manager portal for review. If the scope needs
+                    checking, we may reply by email asking for photos before confirming the final price.
                   </div>
-                  <Link className="button-primary w-fit" to="/portal/contact">
-                    <MailCheck size={18} aria-hidden="true" />
-                    Send inquiry
-                  </Link>
+                  {quoteSubmitStatus === "success" ? (
+                    <div className="rounded-lg bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+                      Quote request sent. Reference: {submittedReference}
+                    </div>
+                  ) : (
+                    <button className="button-primary w-fit" type="button" onClick={submitQuoteRequest} disabled={quoteSubmitStatus === "submitting"}>
+                      {quoteSubmitStatus === "submitting" ? (
+                        <Loader2 className="animate-spin" size={18} aria-hidden="true" />
+                      ) : (
+                        <MailCheck size={18} aria-hidden="true" />
+                      )}
+                      Submit quote request
+                    </button>
+                  )}
+                  {quoteSubmitStatus === "error" && <div className="rounded-lg bg-rose-50 p-4 text-sm font-bold text-rose-700">{quoteSubmitError}</div>}
                 </section>
               )}
             </div>
@@ -577,7 +639,7 @@ export default function Quote() {
               </p>
               <p className="flex items-center gap-2">
                 <MapPin size={16} className="text-coral" aria-hidden="true" />
-                {form.parkingNotes ? "Parking notes added" : "Parking notes not added"}
+                {form.address || "Address not added"}
               </p>
               <p className="flex items-center gap-2">
                 <KeyRound size={16} className="text-coral" aria-hidden="true" />

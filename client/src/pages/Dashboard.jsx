@@ -14,6 +14,7 @@ import {
   MapPin,
   PhoneCall,
   RefreshCw,
+  Search,
   Send,
   ShieldCheck,
   Star,
@@ -30,10 +31,10 @@ import StatusBadge from "../components/StatusBadge.jsx";
 
 const tabs = [
   { key: "leads", label: "Inquiries" },
+  { key: "quotes", label: "Quote review" },
   { key: "bookings", label: "Bookings" },
   { key: "employees", label: "Employees" },
   { key: "pricing", label: "Pricing" },
-  { key: "messages", label: "Messages" },
   { key: "users", label: "Accounts" },
   { key: "audit", label: "Audit" }
 ];
@@ -206,7 +207,7 @@ export default function Dashboard() {
   const [deletedBookings, setDeletedBookings] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [pricing, setPricing] = useState(null);
-  const [messages, setMessages] = useState([]);
+  const [quoteRequests, setQuoteRequests] = useState([]);
   const [reviewsMeta, setReviewsMeta] = useState(null);
   const [auditEvents, setAuditEvents] = useState([]);
   const [bookingForm, setBookingForm] = useState(() => createInitialBookingForm());
@@ -257,7 +258,7 @@ export default function Dashboard() {
         deletedBookingsResponse,
         employeesResponse,
         pricingResponse,
-        messagesResponse,
+        quoteRequestsResponse,
         reviewsResponse,
         auditResponse
       ] = await Promise.all([
@@ -267,7 +268,7 @@ export default function Dashboard() {
         apiClient.get("/bookings/deleted"),
         apiClient.get("/employees"),
         apiClient.get("/quote/pricing"),
-        apiClient.get("/messages"),
+        apiClient.get("/quote/requests"),
         apiClient.get("/reviews"),
         apiClient.get("/audit?limit=100")
       ]);
@@ -278,7 +279,7 @@ export default function Dashboard() {
       setDeletedBookings(deletedBookingsResponse.data.bookings || []);
       setEmployees(employeesResponse.data.employees || []);
       setPricing(pricingResponse.data.pricing || null);
-      setMessages(messagesResponse.data.messages || []);
+      setQuoteRequests(quoteRequestsResponse.data.quoteRequests || []);
       setReviewsMeta(reviewsResponse.data.meta || null);
       setAuditEvents(auditResponse.data.auditEvents || []);
       setStatus("ready");
@@ -299,11 +300,11 @@ export default function Dashboard() {
       { label: "Bookings", value: bookings.length, icon: CalendarCheck, tone: "leaf" },
       { label: "Deleted", value: deletedBookings.length, icon: Trash2, tone: "berry" },
       { label: "Cleaners", value: employees.length, icon: UsersRound, tone: "coral" },
-      { label: "Messages", value: messages.length, icon: Mail, tone: "berry" },
+      { label: "Quote reviews", value: quoteRequests.length, icon: Mail, tone: "berry" },
       { label: "Google rating", value: reviewsMeta?.averageRating ? Number(reviewsMeta.averageRating).toFixed(1) : "N/A", icon: Star, tone: "coal" },
       { label: "Audit events", value: auditEvents.length, icon: History, tone: "leaf" }
     ],
-    [auditEvents.length, bookings.length, deletedBookings.length, employees.length, leads.length, messages.length, reviewsMeta, users]
+    [auditEvents.length, bookings.length, deletedBookings.length, employees.length, leads.length, quoteRequests.length, reviewsMeta, users]
   );
 
   async function updateLeadStatus(leadId, nextStatus) {
@@ -705,17 +706,21 @@ export default function Dashboard() {
     }
   }
 
-  async function markMessage(messageId, isRead) {
-    const previous = messages;
-    setMessages((current) => current.map((message) => (message._id === messageId ? { ...message, isRead } : message)));
+  async function updateQuoteRequestStatus(quoteRequestId, nextStatus) {
+    const previous = quoteRequests;
+    setQuoteRequests((current) =>
+      current.map((quoteRequest) => (quoteRequest._id === quoteRequestId ? { ...quoteRequest, status: nextStatus } : quoteRequest))
+    );
 
     try {
-      const { data } = await apiClient.patch(`/messages/${messageId}`, { isRead });
-      setMessages((current) => current.map((message) => (message._id === messageId ? data.message : message)));
+      const { data } = await apiClient.patch(`/quote/requests/${quoteRequestId}/status`, { status: nextStatus });
+      setQuoteRequests((current) =>
+        current.map((quoteRequest) => (quoteRequest._id === quoteRequestId ? data.quoteRequest : quoteRequest))
+      );
       await loadAuditEvents();
     } catch (requestError) {
-      setMessages(previous);
-      setError(getApiError(requestError, "Message could not be updated."));
+      setQuoteRequests(previous);
+      setError(getApiError(requestError, "Quote request could not be updated."));
     }
   }
 
@@ -734,7 +739,7 @@ export default function Dashboard() {
           <h1 className="mt-5 text-3xl font-extrabold text-coal">Dashboard</h1>
           <p className="mt-3 text-stone-600">
             You are signed in as <span className="font-bold text-coal">{user?.name}</span>. Manager access is required
-            to view Velura inquiries, bookings, messages, and team accounts.
+            to view Velura inquiries, quote requests, bookings, and team accounts.
           </p>
         </div>
       </section>
@@ -747,7 +752,7 @@ export default function Dashboard() {
         <div>
           <p className="eyebrow">Velura admin</p>
           <h1 className="mt-3 text-4xl font-extrabold text-coal">Dashboard</h1>
-          <p className="mt-3 text-stone-600">Manage cleaning inquiries, bookings, client messages, account access, and review signals.</p>
+          <p className="mt-3 text-stone-600">Manage inquiries, quote reviews, bookings, cleaners, account access, and review signals.</p>
         </div>
         <button className="button-secondary" onClick={loadDashboard} type="button" disabled={status === "loading"}>
           {status === "loading" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
@@ -788,6 +793,9 @@ export default function Dashboard() {
       ) : (
         <div className="mt-6">
           {activeTab === "leads" && <LeadTable leads={leads} onStatusChange={updateLeadStatus} />}
+          {activeTab === "quotes" && (
+            <QuoteReviewPanel quoteRequests={quoteRequests} onStatusChange={updateQuoteRequestStatus} />
+          )}
           {activeTab === "bookings" && (
             <BookingPanel
               actionStatus={bookingAction}
@@ -823,7 +831,6 @@ export default function Dashboard() {
             />
           )}
           {activeTab === "pricing" && <PricingPanel pricing={pricing} />}
-          {activeTab === "messages" && <MessageTable messages={messages} onReadChange={markMessage} />}
           {activeTab === "users" && (
             <div className="grid gap-6">
               <PasswordChangePanel
@@ -1179,8 +1186,10 @@ function BookingPanel({
 }) {
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [bookingSearch, setBookingSearch] = useState("");
   const calendarDays = useMemo(() => buildCalendarDays(visibleMonth), [visibleMonth]);
   const selectedDateKey = dateKey(selectedDate);
+  const normalizedSearch = bookingSearch.trim().toLowerCase();
   const bookingsByDate = useMemo(
     () =>
       bookings.reduce((grouped, booking) => {
@@ -1200,6 +1209,25 @@ function BookingPanel({
     [bookings]
   );
   const selectedBookings = bookingsByDate[selectedDateKey] || [];
+  const searchResults = useMemo(() => {
+    if (!normalizedSearch) {
+      return [];
+    }
+
+    return bookings.filter((booking) =>
+      [
+        bookingReference(booking),
+        booking.clientName,
+        booking.email,
+        booking.phone,
+        booking.service,
+        booking.address,
+        booking.status
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch))
+    );
+  }, [bookings, normalizedSearch]);
 
   useEffect(() => {
     if (!focusDate) {
@@ -1223,6 +1251,20 @@ function BookingPanel({
 
   return (
     <div className="grid gap-6">
+      <section className="panel p-5">
+        <label className="grid gap-2 text-sm font-bold text-coal">
+          Search bookings
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-coral" size={18} aria-hidden="true" />
+            <input
+              className="input-field pl-11"
+              value={bookingSearch}
+              onChange={(event) => setBookingSearch(event.target.value)}
+              placeholder="Search VEL-2026-0001, client name, email, phone, service, or address"
+            />
+          </div>
+        </label>
+      </section>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.8fr)]">
         <BookingCalendar
           bookingsByDate={bookingsByDate}
@@ -1234,9 +1276,12 @@ function BookingPanel({
         />
         <SelectedDaySchedule
           actionStatus={actionStatus}
-          bookings={selectedBookings}
+          bookings={normalizedSearch ? searchResults : selectedBookings}
           employees={employees}
+          emptyLabel={normalizedSearch ? "No bookings match that search." : "No bookings on this date."}
           selectedDate={selectedDate}
+          subtitle={normalizedSearch ? `${searchResults.length} matching booking${searchResults.length === 1 ? "" : "s"}` : ""}
+          title={normalizedSearch ? "Search results" : ""}
           onDelete={onDelete}
           onEdit={onEdit}
           onEmailConfirmation={onEmailConfirmation}
@@ -1367,7 +1412,10 @@ function SelectedDaySchedule({
   actionStatus,
   bookings,
   employees,
+  emptyLabel = "No bookings on this date.",
   selectedDate,
+  subtitle = "",
+  title = "",
   onDelete,
   onEdit,
   onEmailConfirmation,
@@ -1377,7 +1425,8 @@ function SelectedDaySchedule({
   return (
     <section className="panel p-5">
       <p className="eyebrow">Selected day</p>
-      <h2 className="mt-1 text-2xl font-extrabold text-coal">{shortDateLabel(selectedDate)}</h2>
+      <h2 className="mt-1 text-2xl font-extrabold text-coal">{title || shortDateLabel(selectedDate)}</h2>
+      {subtitle && <p className="mt-2 text-sm font-semibold text-stone-500">{subtitle}</p>}
       <div className="mt-5 grid gap-3">
         {bookings.map((booking) => {
           const latestLog =
@@ -1480,7 +1529,7 @@ function SelectedDaySchedule({
         })}
         {bookings.length === 0 && (
           <div className="rounded-lg border border-dashed border-stone-300 bg-mist p-5 text-sm font-semibold text-stone-500">
-            No bookings on this date.
+            {emptyLabel}
           </div>
         )}
       </div>
@@ -1732,42 +1781,106 @@ function BookingForm({ editingBookingId, employees, leads, form, status, onCance
   );
 }
 
-function MessageTable({ messages, onReadChange }) {
+const quoteStatuses = ["new", "reviewing", "awaiting_photos", "quoted", "booked", "closed"];
+
+function quoteStatusLabel(value = "") {
+  return String(value || "").replace(/_/g, " ");
+}
+
+function buildPhotoRequestMailto(quoteRequest) {
+  const subject = `[${quoteRequest.quoteReference}] Velura quote - photos requested`;
+  const body = [
+    `Hello ${quoteRequest.clientName},`,
+    "",
+    `Thank you for your Velura quote request ${quoteRequest.quoteReference}.`,
+    "",
+    "To confirm the final price and scope, could you please reply with photos or a short video of the areas you would like cleaned?",
+    "",
+    "Helpful photos include kitchens, bathrooms, flooring/carpets, any heavy build-up, access points, and parking if relevant.",
+    "",
+    "Kind regards,",
+    "Velura"
+  ].join("\n");
+
+  return `mailto:${quoteRequest.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function QuoteReviewPanel({ quoteRequests, onStatusChange }) {
   return (
     <div className="panel overflow-hidden">
+      <div className="border-b border-stone-200 bg-white p-5">
+        <p className="eyebrow">Quote review</p>
+        <h2 className="mt-1 text-2xl font-extrabold text-coal">Review submitted quotes</h2>
+        <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-stone-500">
+          Email is the communication channel. Use this queue to check scope, ask for photos, and move the request toward
+          a confirmed booking.
+        </p>
+      </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
           <thead className="bg-mist text-xs font-bold uppercase tracking-wide text-stone-500">
             <tr>
-              <th className="px-4 py-3">From</th>
-              <th className="px-4 py-3">Message</th>
-              <th className="px-4 py-3">Read</th>
+              <th className="px-4 py-3">Reference</th>
+              <th className="px-4 py-3">Client</th>
+              <th className="px-4 py-3">Quote</th>
+              <th className="px-4 py-3">Scope</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Action</th>
               <th className="px-4 py-3">Received</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-200">
-            {messages.map((message) => (
-              <tr key={message._id}>
+            {quoteRequests.map((quoteRequest) => {
+              const quote = quoteRequest.quoteResult || {};
+              const input = quoteRequest.quoteInput || {};
+
+              return (
+              <tr key={quoteRequest._id}>
                 <td className="px-4 py-4">
-                  <p className="font-extrabold text-coal">{message.name}</p>
-                  <p className="text-stone-500">{message.email}</p>
+                  <p className="font-extrabold text-coal">{quoteRequest.quoteReference}</p>
+                  <p className="mt-1 text-xs font-bold text-stone-500">{quoteStatusLabel(quoteRequest.status)}</p>
                 </td>
-                <td className="max-w-xl px-4 py-4 text-stone-600">{message.body}</td>
                 <td className="px-4 py-4">
-                  <label className="inline-flex items-center gap-2 text-sm font-bold text-stone-700">
-                    <input
-                      className="h-4 w-4 accent-amber-700"
-                      type="checkbox"
-                      checked={message.isRead}
-                      onChange={(event) => onReadChange(message._id, event.target.checked)}
-                    />
-                    {message.isRead ? "Read" : "Unread"}
-                  </label>
+                  <p className="font-extrabold text-coal">{quoteRequest.clientName}</p>
+                  <p className="text-stone-500">{quoteRequest.email}</p>
+                  <p className="text-stone-500">{quoteRequest.phone}</p>
                 </td>
-                <td className="px-4 py-4 text-stone-500">{new Date(message.createdAt).toLocaleDateString()}</td>
+                <td className="px-4 py-4">
+                  <p className="font-extrabold text-coal">{quote.displayPrice || "Quote pending"}</p>
+                  <p className="text-stone-500">{quote.serviceLabel || input.serviceType}</p>
+                  <p className="text-stone-500">{quote.propertyLabel}</p>
+                </td>
+                <td className="max-w-sm px-4 py-4 text-stone-600">
+                  {quoteRequest.address && <p className="font-semibold">{quoteRequest.address}</p>}
+                  <p>{quoteRequest.preferredDate || "No date"} {quoteRequest.preferredTime || ""}</p>
+                  {quoteRequest.accessInstructions && <p className="mt-1">Access: {quoteRequest.accessInstructions}</p>}
+                  {quoteRequest.parkingNotes && <p className="mt-1">Parking: {quoteRequest.parkingNotes}</p>}
+                  {quoteRequest.quoteNotes && <p className="mt-1">Notes: {quoteRequest.quoteNotes}</p>}
+                </td>
+                <td className="px-4 py-4">
+                  <select
+                    className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-700"
+                    value={quoteRequest.status}
+                    onChange={(event) => onStatusChange(quoteRequest._id, event.target.value)}
+                  >
+                    {quoteStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {quoteStatusLabel(status)}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-4 py-4">
+                  <a className="button-secondary whitespace-nowrap px-3 py-2" href={buildPhotoRequestMailto(quoteRequest)}>
+                    <Mail size={16} aria-hidden="true" />
+                    Ask for photos
+                  </a>
+                </td>
+                <td className="px-4 py-4 text-stone-500">{new Date(quoteRequest.createdAt).toLocaleDateString()}</td>
               </tr>
-            ))}
-            {messages.length === 0 && <EmptyRow label="No messages yet" columns={4} />}
+              );
+            })}
+            {quoteRequests.length === 0 && <EmptyRow label="No quote requests yet" columns={7} />}
           </tbody>
         </table>
       </div>

@@ -9,6 +9,7 @@ const emptyDatabase = {
   users: [],
   leads: [],
   messages: [],
+  quoteRequests: [],
   bookings: [],
   employees: [],
   reviews: [],
@@ -59,6 +60,7 @@ async function readDatabase() {
     users: parsed.users || [],
     leads: parsed.leads || [],
     messages: parsed.messages || [],
+    quoteRequests: parsed.quoteRequests || [],
     bookings: parsed.bookings || [],
     employees: parsed.employees || [],
     reviews: parsed.reviews || [],
@@ -232,6 +234,74 @@ export async function updateMessage(id, updates) {
 
     Object.assign(message, updates, { updatedAt: now() });
     return message;
+  });
+}
+
+export async function nextQuoteReference(year) {
+  return updateDatabase((database) => {
+    const prefix = `VQ-${year}-`;
+    const latest = database.quoteRequests.reduce((max, quoteRequest) => {
+      const current = String(quoteRequest.quoteReference || "");
+
+      if (!current.startsWith(prefix)) {
+        return max;
+      }
+
+      const numericPart = Number(current.replace(prefix, ""));
+      return Number.isFinite(numericPart) ? Math.max(max, numericPart) : max;
+    }, 0);
+
+    return `${prefix}${String(latest + 1).padStart(4, "0")}`;
+  });
+}
+
+export async function createQuoteRequest(payload) {
+  return updateDatabase((database) => {
+    const timestamp = now();
+    const quoteRequest = {
+      _id: randomUUID(),
+      quoteReference: payload.quoteReference,
+      clientName: payload.clientName,
+      email: payload.email.toLowerCase(),
+      phone: payload.phone,
+      address: payload.address || "",
+      preferredDate: payload.preferredDate || "",
+      preferredTime: payload.preferredTime || "",
+      accessInstructions: payload.accessInstructions || "",
+      parkingNotes: payload.parkingNotes || "",
+      quoteNotes: payload.quoteNotes || "",
+      status: payload.status || "new",
+      quoteInput: payload.quoteInput,
+      quoteResult: payload.quoteResult,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    database.quoteRequests.push(quoteRequest);
+    return quoteRequest;
+  });
+}
+
+export async function listQuoteRequests() {
+  const database = await readDatabase();
+  return clone(sortNewest(database.quoteRequests));
+}
+
+export async function findQuoteRequestById(id) {
+  const database = await readDatabase();
+  return clone(database.quoteRequests.find((quoteRequest) => quoteRequest._id === id) || null);
+}
+
+export async function updateQuoteRequest(id, updates) {
+  return updateDatabase((database) => {
+    const quoteRequest = database.quoteRequests.find((item) => item._id === id);
+
+    if (!quoteRequest) {
+      return null;
+    }
+
+    Object.assign(quoteRequest, updates, { updatedAt: now() });
+    return quoteRequest;
   });
 }
 

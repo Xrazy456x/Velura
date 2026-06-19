@@ -46,7 +46,7 @@ Managers can view recent audit events in the Dashboard Audit tab.
 Suggested starting retention schedule:
 
 - Open inquiries: review after 12 months of inactivity.
-- Closed inquiries and client messages: retain for 24 months unless needed for contract, accounting, insurance, or dispute reasons.
+- Closed inquiries and quote requests: retain for 24 months unless needed for contract, accounting, insurance, or dispute reasons.
 - Booking records: retain only as long as needed for service delivery, accounting, complaints, insurance, or dispute handling.
 - Accounts: retain while active, then disable or remove when access is no longer needed.
 - Audit logs: retain for up to 6 years (`2190` days) unless a shorter period is more appropriate.

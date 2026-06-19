@@ -85,7 +85,7 @@ export default function Home() {
             </h2>
             <p className="mt-5 text-base leading-7 text-stone-600">
               Velura presents as calm and luxurious to customers, while the dashboard keeps inquiries, client
-              messages, job status, users, and Google reviews organised behind the scenes.
+              quote reviews, job status, users, and Google reviews organised behind the scenes.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link className="button-primary" to="/portal/quote">

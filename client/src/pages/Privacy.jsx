@@ -12,7 +12,7 @@ const sections = [
   },
   {
     title: "Cleaner and manager access",
-    body: "Authorised managers can access inquiries, bookings, cleaner schedules, messages, and audit logs. Cleaner assignment information is used to organise work and give the assigned team the details needed to complete a visit."
+    body: "Authorised managers can access inquiries, quote requests, bookings, cleaner schedules, and audit logs. Cleaner assignment information is used to organise work and give the assigned team the details needed to complete a visit."
   },
   {
     title: "Storage and retention",

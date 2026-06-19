@@ -265,6 +265,54 @@ export async function sendLeadNotification(lead) {
   });
 }
 
+export async function sendQuoteRequestNotification(quoteRequest) {
+  if (!isEmailConfigured()) {
+    console.info("Email provider is not configured. Skipping quote request notification email.");
+    return { sent: false, reason: "Email provider not configured" };
+  }
+
+  const reference = quoteRequest.quoteReference || "VQ-REQUEST";
+  const quote = quoteRequest.quoteResult || {};
+  const lines = [
+    `A new quote request has arrived from ${quoteRequest.clientName}.`,
+    "Use the manager portal to review the estimate, ask for photos, or mark the quote as sent."
+  ];
+  const detailRows = [
+    { label: "Quote reference", value: reference },
+    { label: "Client", value: quoteRequest.clientName },
+    { label: "Email", value: quoteRequest.email },
+    { label: "Phone", value: quoteRequest.phone },
+    { label: "Service", value: quote.serviceLabel },
+    { label: "Property", value: quote.propertyLabel },
+    { label: "Guide price", value: quote.displayPrice },
+    { label: "Preferred date", value: quoteRequest.preferredDate },
+    { label: "Preferred time", value: quoteRequest.preferredTime },
+    { label: "Address", value: quoteRequest.address },
+    { label: "Access", value: quoteRequest.accessInstructions },
+    { label: "Parking", value: quoteRequest.parkingNotes },
+    { label: "Notes", value: quoteRequest.quoteNotes }
+  ];
+  const textLines = [
+    ...lines,
+    "",
+    ...detailRows.filter((row) => row.value).map((row) => `${row.label}: ${row.value}`)
+  ];
+
+  return sendEmail({
+    to: env.smtp.contactTo,
+    replyTo: quoteRequest.email,
+    subject: `[${reference}] New Velura quote request from ${quoteRequest.clientName}`,
+    text: textLines.join("\n"),
+    html: buildEmailHtml("New quote request", lines, {
+      eyebrow: "Quote review",
+      referenceLabel: "Quote reference",
+      referenceValue: reference,
+      detailRows,
+      replyNote: `Replying to this email will reply to ${quoteRequest.email}.`
+    })
+  });
+}
+
 async function sendSms({ to, body }) {
   if (!to) {
     return { sent: false, reason: "Client phone number is missing" };

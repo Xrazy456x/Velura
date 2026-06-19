@@ -11,7 +11,7 @@ Velura uses these collections:
 ```text
 users        Account logins, manager/user roles, hashed passwords
 leads        Contact form inquiries and customer enquiry details
-messages     Message records linked to inquiries
+quoteRequests Quote review records linked to submitted instant quotes
 bookings     Calendar jobs, client details, address, access notes, parking notes, assigned cleaners, status, communication log
 employees    Cleaner/team profiles, skills, availability notes
 reviews      Cached Google reviews

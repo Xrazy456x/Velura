@@ -81,7 +81,7 @@ export const site = {
     { title: "Request", description: "Clients send an inquiry with property details and preferred service.", icon: MailCheck },
     { title: "Prepare", description: "Admins qualify the inquiry and confirm scope, access, and timing.", icon: Clock3 },
     { title: "Care", description: "The clean follows a repeatable checklist with room-by-room attention.", icon: Sparkles },
-    { title: "Follow up", description: "Messages, status updates, and Google reviews keep quality visible.", icon: LineChart }
+    { title: "Follow up", description: "Email replies, status updates, and Google reviews keep quality visible.", icon: LineChart }
   ],
   plans: [
     {

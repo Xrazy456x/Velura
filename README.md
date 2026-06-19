@@ -24,7 +24,7 @@ velura-cleaning-website/
 │   │   ├── config/           # Environment and MongoDB connection
 │   │   ├── controllers/      # Request handlers for auth, CRM, reviews
 │   │   ├── middleware/       # JWT auth, role guards, validation, errors
-│   │   ├── models/           # User, Lead, Message, Booking, Review schemas
+│   │   ├── models/           # User, Lead, QuoteRequest, Booking, Review schemas
 │   │   ├── routes/           # REST route modules
 │   │   ├── services/         # Email/SMS delivery and Google Places review cache
 │   │   ├── utils/            # Token and async helpers
@@ -50,10 +50,10 @@ This uses Node.js, Express, MongoDB, Mongoose, React, Vite, and Tailwind CSS bec
 - Tailwind CSS design system with easy Google Font customization
 - Smooth page and card animations with Framer Motion
 - JWT authentication with bcrypt password hashing
-- Private manager dashboard for account creation, inquiries, bookings, pricing, employees, messages, and audit activity
+- Private manager dashboard for account creation, inquiries, quote reviews, bookings, pricing, employees, and audit activity
 - Password changes for signed-in accounts and manager-controlled password resets
 - Manager-only booking system linked to inquiries, with email/SMS confirmation hooks
-- Contact form that stores cleaning inquiries, stores messages, and optionally sends email
+- Contact form that stores cleaning inquiries and optionally sends email
 - Google Places API review fetching with MongoDB caching
 - Security basics: Helmet, CORS, rate limiting, validation, environment variables
 - SEO-friendly metadata in `client/index.html`
@@ -152,7 +152,7 @@ MongoDB is still the production database path, but local development is forgivin
 server/data/dev-db.json
 ```
 
-This lets login, accounts, inquiries, messages, and the dashboard work immediately. To force this mode, set:
+This lets login, accounts, inquiries, quote requests, bookings, and the dashboard work immediately. To force this mode, set:
 
 ```bash
 DATABASE_DRIVER=file

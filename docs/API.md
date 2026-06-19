@@ -159,6 +159,53 @@ Allowed property types: `studio`, `flat`, `house`, `office`.
 
 Manager only. Returns Velura's full internal pricing matrix, add-ons, multipliers, and inspection rules for the dashboard Pricing tab.
 
+`POST /quote/requests`
+
+Submits a quote request for manager review. The API calculates the latest estimate, stores a snapshot, generates a reference such as `VQ-2026-0001`, and sends an internal email alert when email is configured.
+
+```json
+{
+  "clientName": "Alex Customer",
+  "email": "alex@example.com",
+  "phone": "+447000000000",
+  "address": "12 Example Street, London",
+  "preferredDate": "2026-06-20",
+  "preferredTime": "10:00",
+  "accessInstructions": "Use side entrance.",
+  "parkingNotes": "Permit bay outside.",
+  "quoteNotes": "Photos can be provided by email.",
+  "quoteInput": {
+    "serviceType": "deep_clean",
+    "propertyType": "flat",
+    "bedrooms": 2,
+    "bathrooms": 1,
+    "condition": "average",
+    "urgency": "standard",
+    "frequency": "one_off",
+    "addOns": ["oven_deep"],
+    "carpetRooms": 1,
+    "linenSets": 1,
+    "addOnAreas": 1
+  }
+}
+```
+
+`GET /quote/requests`
+
+Manager only. Returns submitted quote requests for the dashboard Quote Review tab.
+
+`PATCH /quote/requests/:id/status`
+
+Manager only. Updates quote review status.
+
+```json
+{
+  "status": "awaiting_photos"
+}
+```
+
+Allowed quote statuses: `new`, `reviewing`, `awaiting_photos`, `quoted`, `booked`, `closed`.
+
 ## Bookings
 
 Manager only.
@@ -284,22 +331,6 @@ Manager only. Records that a manager completed phone confirmation and marks the 
 ```json
 {
   "detail": "Phone confirmation completed by manager."
-}
-```
-
-## Messages
-
-Manager only.
-
-`GET /messages`
-
-Returns all client inquiry messages.
-
-`PATCH /messages/:id`
-
-```json
-{
-  "isRead": true
 }
 ```
 

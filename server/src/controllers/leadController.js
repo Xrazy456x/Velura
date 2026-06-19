@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { useFileDatabase } from "../config/database.js";
 import Lead from "../models/Lead.js";
-import Message from "../models/Message.js";
 import { recordAuditEvent } from "../services/auditService.js";
 import * as fileStore from "../services/fileStore.js";
 import { sendLeadNotification } from "../services/emailService.js";
@@ -36,15 +35,6 @@ export const createLead = asyncHandler(async (req, res) => {
         service: payload.service || "General inquiry"
       });
 
-  const messagePayload = {
-    lead: lead._id,
-    name: lead.name,
-    email: lead.email,
-    subject: lead.service,
-    body: lead.message
-  };
-  const message = useFileDatabase() ? await fileStore.createMessage(messagePayload) : await Message.create(messagePayload);
-
   const email = await sendLeadNotification(lead);
 
   await recordAuditEvent(req, {
@@ -63,7 +53,7 @@ export const createLead = asyncHandler(async (req, res) => {
     }
   });
 
-  return res.status(201).json({ lead, message, email });
+  return res.status(201).json({ lead, email });
 });
 
 export const listLeads = asyncHandler(async (req, res) => {

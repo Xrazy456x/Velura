@@ -53,7 +53,7 @@ export default function Contact() {
             <p className="eyebrow">Response</p>
             <h2 className="mt-3 text-2xl font-extrabold text-coal">A calm, discreet booking flow.</h2>
             <p className="mt-4 text-sm leading-6 text-stone-600">
-              Velura keeps contact details, service notes, messages, and booking status in one place so every follow-up
+              Velura keeps contact details, service notes, email follow-ups, and booking status in one place so every follow-up
               feels polished and personal.
             </p>
             <div className="mt-6 space-y-3 text-sm font-semibold text-stone-700">
