@@ -235,6 +235,11 @@ export default function Dashboard() {
     setDeletedBookings(deletedBookingsResponse.data.bookings || []);
   }
 
+  async function loadEmployeeRecords() {
+    const { data } = await apiClient.get("/employees");
+    setEmployees(data.employees || []);
+  }
+
   async function loadDashboard() {
     setStatus("loading");
     setError("");
@@ -615,6 +620,7 @@ export default function Dashboard() {
 
   function updateEmployeeForm(event) {
     const { name, value } = event.target;
+    setEmployeeStatus("idle");
     setEmployeeForm((current) => ({ ...current, [name]: value }));
   }
 
@@ -626,6 +632,11 @@ export default function Dashboard() {
     try {
       const payload = {
         ...employeeForm,
+        name: employeeForm.name.trim(),
+        email: employeeForm.email.trim(),
+        phone: employeeForm.phone.trim(),
+        role: employeeForm.role.trim() || "Cleaner",
+        availabilityNotes: employeeForm.availabilityNotes.trim(),
         skills: employeeForm.skills
           .split(",")
           .map((skill) => skill.trim())
@@ -635,6 +646,7 @@ export default function Dashboard() {
       setEmployees((current) => [data.employee, ...current]);
       setEmployeeForm(initialEmployeeForm);
       setEmployeeStatus("success");
+      await loadEmployeeRecords();
       await loadAuditEvents();
     } catch (requestError) {
       setError(getApiError(requestError, "Cleaner profile could not be created."));
@@ -890,6 +902,16 @@ function EmployeePanel({ employees, form, status, onChange, onDelete, onStatusCh
             placeholder="Working days, preferred areas, annual leave, school-run constraints, or commercial-only notes."
           />
         </label>
+        {status === "success" && (
+          <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 lg:col-span-4">
+            Cleaner added and saved to the database.
+          </p>
+        )}
+        {status === "error" && (
+          <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 lg:col-span-4">
+            Cleaner could not be added. Check the message at the top of the dashboard.
+          </p>
+        )}
       </form>
 
       <div className="grid gap-4 lg:grid-cols-2">

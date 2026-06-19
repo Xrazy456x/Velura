@@ -5,14 +5,36 @@ import { recordAuditEvent } from "../services/auditService.js";
 import * as fileStore from "../services/fileStore.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
+function emptyStringToBlank(value) {
+  return typeof value === "string" && value.trim() === "" ? "" : value;
+}
+
+function normalizeSkills(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((skill) => skill.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 const employeeBodySchema = z.object({
   name: z.string().trim().min(2, "Cleaner name must be at least 2 characters.").max(100),
-  email: z.string().trim().email("Please provide a valid email.").toLowerCase().optional().or(z.literal("")),
-  phone: z.string().trim().max(40).optional().or(z.literal("")),
-  role: z.string().trim().max(80).optional().or(z.literal("")),
+  email: z.preprocess(
+    emptyStringToBlank,
+    z.string().trim().email("Please provide a valid cleaner email, or leave it blank.").toLowerCase().optional().or(z.literal(""))
+  ),
+  phone: z.preprocess(emptyStringToBlank, z.string().trim().max(40).optional().or(z.literal(""))),
+  role: z.preprocess(emptyStringToBlank, z.string().trim().max(80).optional().or(z.literal(""))),
   status: z.enum(["active", "inactive"]).default("active"),
-  skills: z.array(z.string().trim().min(1).max(80)).default([]),
-  availabilityNotes: z.string().trim().max(1200).optional().or(z.literal(""))
+  skills: z.preprocess(normalizeSkills, z.array(z.string().trim().min(1).max(80)).default([])),
+  availabilityNotes: z.preprocess(emptyStringToBlank, z.string().trim().max(1200).optional().or(z.literal("")))
 });
 
 export const createEmployeeSchema = z.object({
