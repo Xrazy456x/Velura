@@ -116,7 +116,7 @@ function buildDetailRows(rows = []) {
 
 function buildEmailHtml(title, lines = [], options = {}) {
   const {
-    eyebrow = "Velura",
+    eyebrow = "Velura Services",
     referenceLabel = "Booking reference",
     referenceValue = "",
     detailRows = [],
@@ -154,7 +154,7 @@ function buildEmailHtml(title, lines = [], options = {}) {
               : ""
           }
           <div style="margin-top:26px;padding-top:20px;border-top:1px solid #eee6da;">
-            <p style="margin:0 0 4px;color:#241f1a;font-weight:800;">Velura</p>
+            <p style="margin:0 0 4px;color:#241f1a;font-weight:800;">Velura Services</p>
             <p style="margin:0;color:#8f6a52;font-weight:700;">${escapeHtml(footerNote)}</p>
           </div>
         </div>
@@ -301,7 +301,7 @@ export async function sendQuoteRequestNotification(quoteRequest) {
   return sendEmail({
     to: env.smtp.contactTo,
     replyTo: quoteRequest.email,
-    subject: `[${reference}] New Velura quote request from ${quoteRequest.clientName}`,
+    subject: `[${reference}] New Velura Services quote request from ${quoteRequest.clientName}`,
     text: textLines.join("\n"),
     html: buildEmailHtml("New quote request", lines, {
       eyebrow: "Quote review",
@@ -348,7 +348,7 @@ async function sendSms({ to, body }) {
 export async function sendBookingSmsConfirmation(booking) {
   return sendSms({
     to: booking.phone,
-    body: `Hello ${booking.clientName}, your Velura booking ${bookingReference(booking)} is set: ${bookingSummary(booking)}. Reply to this number if anything needs changing.`
+    body: `Hello ${booking.clientName}, your Velura Services booking ${bookingReference(booking)} is set: ${bookingSummary(booking)}. Reply to this number if anything needs changing.`
   });
 }
 
@@ -357,7 +357,7 @@ export async function sendBookingSmsStatusUpdate(booking, previousStatus) {
 
   return sendSms({
     to: booking.phone,
-    body: `Hello ${booking.clientName}, your Velura booking ${bookingReference(booking)} has been ${statusText}. Previous status: ${previousStatus || "not set"}. ${bookingSummary(booking)}.`
+    body: `Hello ${booking.clientName}, your Velura Services booking ${bookingReference(booking)} has been ${statusText}. Previous status: ${previousStatus || "not set"}. ${bookingSummary(booking)}.`
   });
 }
 
@@ -370,7 +370,7 @@ export async function sendBookingConfirmation(booking) {
   const reference = bookingReference(booking);
   const lines = [
     `Hello ${booking.clientName},`,
-    `Thank you for choosing Velura. Your cleaning booking is now in our diary under reference ${reference}.`,
+    `Thank you for choosing Velura Services. Your cleaning booking is now in our diary under reference ${reference}.`,
     "Our team will arrive prepared for the agreed service. If anything changes before the visit, just reply directly to this email."
   ].filter(Boolean);
   const detailRows = [
@@ -390,14 +390,14 @@ export async function sendBookingConfirmation(booking) {
     "",
     `Reply to this email and your message will go to ${env.smtp.contactTo}.`,
     "",
-    "Velura",
+    "Velura Services",
     "Luxury cleaning, gently delivered"
   ];
 
   return sendEmail({
     to: booking.email,
     replyTo: env.smtp.contactTo,
-    subject: `Velura booking ${reference} is confirmed`,
+    subject: `Velura Services booking ${reference} is confirmed`,
     text: textLines.join("\n"),
     html: buildEmailHtml("Your Velura booking is confirmed", lines, {
       eyebrow: "Booking confirmation",
@@ -418,9 +418,9 @@ export async function sendBookingStatusUpdate(booking, previousStatus) {
   const statusText = booking.status === "completed" ? "completed" : `updated to ${booking.status}`;
   const lines = [
     `Hello ${booking.clientName},`,
-    `Your Velura booking ${reference} has been ${statusText}.`,
+    `Your Velura Services booking ${reference} has been ${statusText}.`,
     booking.status === "completed"
-      ? "Thank you for trusting Velura with your space. We hope everything feels beautifully refreshed."
+      ? "Thank you for trusting Velura Services with your space. We hope everything feels beautifully refreshed."
       : "Please reply to this email if you need anything adjusted."
   ].filter(Boolean);
   const detailRows = [
@@ -440,14 +440,14 @@ export async function sendBookingStatusUpdate(booking, previousStatus) {
     "",
     `Reply to this email and your message will go to ${env.smtp.contactTo}.`,
     "",
-    "Velura",
+    "Velura Services",
     "Luxury cleaning, gently delivered"
   ];
 
   return sendEmail({
     to: booking.email,
     replyTo: env.smtp.contactTo,
-    subject: `Velura booking ${reference} has been ${statusText}`,
+    subject: `Velura Services booking ${reference} has been ${statusText}`,
     text: textLines.join("\n"),
     html: buildEmailHtml(`Your booking has been ${statusText}`, lines, {
       eyebrow: "Booking update",
@@ -493,7 +493,7 @@ export async function sendBookingTeamNotification(booking, eventLabel = "created
   return sendEmail({
     to: env.smtp.contactTo,
     replyTo: booking.email,
-    subject: `[${reference}] Velura booking ${eventLabel}: ${booking.clientName}`,
+    subject: `[${reference}] Velura Services booking ${eventLabel}: ${booking.clientName}`,
     text: textLines.join("\n"),
     html: buildEmailHtml(`Booking ${eventLabel}`, lines, {
       eyebrow: "Manager booking alert",

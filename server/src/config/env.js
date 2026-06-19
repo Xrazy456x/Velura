@@ -2,6 +2,12 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+function normalizeEmailFrom(value) {
+  const sender = (value || "Velura Services <bookings@veluraservices.com>").trim();
+
+  return sender.replace(/^"?Velura"?\s*</i, "Velura Services <");
+}
+
 const requiredInProduction = ["MONGO_URI", "JWT_SECRET"];
 
 if (process.env.NODE_ENV === "production") {
@@ -35,7 +41,7 @@ export const env = {
     requireTls: process.env.SMTP_REQUIRE_TLS !== "false",
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
-    from: process.env.EMAIL_FROM || process.env.SMTP_FROM || "Velura <bookings@veluraservices.com>",
+    from: normalizeEmailFrom(process.env.EMAIL_FROM || process.env.SMTP_FROM),
     contactTo: process.env.CONTACT_TO || process.env.SMTP_USER || "bookings@veluraservices.com"
   },
   resend: {

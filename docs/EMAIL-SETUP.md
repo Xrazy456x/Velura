@@ -18,7 +18,7 @@ Use Resend for the live Render backend because it sends email through HTTPS. Thi
 
 ```env
 RESEND_API_KEY=re_your_resend_api_key
-EMAIL_FROM=Velura <bookings@veluraservices.com>
+EMAIL_FROM=Velura Services <bookings@veluraservices.com>
 CONTACT_TO=bookings@veluraservices.com
 ```
 
@@ -29,7 +29,7 @@ CONTACT_TO=bookings@veluraservices.com
 
 `RESEND_API_KEY` is the private Resend API key. Never put this in Cloudflare Pages or frontend variables.
 
-`EMAIL_FROM` is the sender clients will see.
+`EMAIL_FROM` is the sender clients will see. In Render's variable value field, enter `Velura Services <bookings@veluraservices.com>` without extra quote marks.
 
 `CONTACT_TO` is the internal Velura inbox for contact forms and manager booking alerts.
 
@@ -43,7 +43,7 @@ SMTP_PORT=587
 SMTP_REQUIRE_TLS=true
 SMTP_USER=your-login
 SMTP_PASS=your-password
-SMTP_FROM=Velura <bookings@veluraservices.com>
+SMTP_FROM=Velura Services <bookings@veluraservices.com>
 CONTACT_TO=bookings@veluraservices.com
 ```
 

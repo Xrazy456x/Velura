@@ -63,7 +63,7 @@ For email confirmations on Render Free, use Resend because it sends through HTTP
 
 ```env
 RESEND_API_KEY=re_your_resend_api_key
-EMAIL_FROM=Velura <bookings@veluraservices.com>
+EMAIL_FROM=Velura Services <bookings@veluraservices.com>
 CONTACT_TO=bookings@veluraservices.com
 ```
 
