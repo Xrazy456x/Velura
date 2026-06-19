@@ -439,27 +439,20 @@ export default function Dashboard() {
   async function restoreBooking(bookingId) {
     const previous = bookings;
     const previousDeleted = deletedBookings;
-    const bookingToRestore = deletedBookings.find((booking) => booking._id === bookingId);
-
-    if (bookingToRestore) {
-      setBookings((current) =>
-        [...current, { ...bookingToRestore, deletedAt: null, deletedBy: null }].sort(
-          (a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime()
-        )
-      );
-    }
-
-    setDeletedBookings((current) => current.filter((booking) => booking._id !== bookingId));
     setError("");
 
     try {
       const { data } = await apiClient.post(`/bookings/${bookingId}/restore`);
+      const restoredBooking = data.booking;
+
+      setBookingFocusDate(restoredBooking.scheduledFor);
       setBookings((current) =>
-        [...current.filter((booking) => booking._id !== bookingId), data.booking].sort(
+        [...current.filter((booking) => booking._id !== bookingId), restoredBooking].sort(
           (a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime()
         )
       );
-      await loadAuditEvents();
+      setDeletedBookings((current) => current.filter((booking) => booking._id !== bookingId));
+      await Promise.allSettled([loadBookingRecords(), loadAuditEvents()]);
     } catch (requestError) {
       setBookings(previous);
       setDeletedBookings(previousDeleted);
