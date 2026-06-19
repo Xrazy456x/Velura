@@ -240,12 +240,31 @@ export async function findBookingById(id) {
   return clone(database.bookings.find((item) => item._id === id) || null);
 }
 
+export async function nextBookingNumber(year) {
+  return updateDatabase((database) => {
+    const prefix = `VEL-${year}-`;
+    const latest = database.bookings.reduce((max, booking) => {
+      const current = String(booking.bookingNumber || "");
+
+      if (!current.startsWith(prefix)) {
+        return max;
+      }
+
+      const numericPart = Number(current.replace(prefix, ""));
+      return Number.isFinite(numericPart) ? Math.max(max, numericPart) : max;
+    }, 0);
+
+    return `${prefix}${String(latest + 1).padStart(4, "0")}`;
+  });
+}
+
 export async function createBooking(payload) {
   return updateDatabase((database) => {
     const timestamp = now();
     const booking = {
       _id: randomUUID(),
       lead: payload.lead || null,
+      bookingNumber: payload.bookingNumber || "",
       clientName: payload.clientName,
       email: payload.email.toLowerCase(),
       phone: payload.phone || "",

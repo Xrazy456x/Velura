@@ -55,23 +55,107 @@ function escapeHtml(value = "") {
     .replaceAll('"', "&quot;");
 }
 
-function buildEmailHtml(title, lines = []) {
+function bookingReference(booking) {
+  if (booking?.bookingNumber) {
+    return booking.bookingNumber;
+  }
+
+  const fallback = String(booking?._id || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(-6);
+
+  return fallback ? `VEL-${fallback}` : "VEL-BOOKING";
+}
+
+function formatDuration(minutes = 0) {
+  const totalMinutes = Number(minutes) || 0;
+  const hours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
+
+  if (hours && remainingMinutes) {
+    return `${hours} hr ${remainingMinutes} min`;
+  }
+
+  if (hours) {
+    return `${hours} hr`;
+  }
+
+  return `${totalMinutes} min`;
+}
+
+function humanStatus(value = "") {
+  return String(value).replace(/_/g, " ");
+}
+
+function buildDetailRows(rows = []) {
+  const visibleRows = rows.filter((row) => {
+    const value = row?.value;
+    return value !== undefined && value !== null && String(value).trim() !== "";
+  });
+
+  if (!visibleRows.length) {
+    return "";
+  }
+
+  return `
+    <div style="margin:24px 0;border:1px solid #eee1cf;border-radius:14px;overflow:hidden;background:#fffaf2;">
+      ${visibleRows
+        .map(
+          (row) => `
+            <div style="display:block;padding:14px 18px;border-bottom:1px solid #eee1cf;">
+              <p style="margin:0 0 3px;color:#8f6a52;font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;">${escapeHtml(row.label)}</p>
+              <p style="margin:0;color:#241f1a;font-size:15px;font-weight:700;line-height:1.5;">${escapeHtml(row.value)}</p>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function buildEmailHtml(title, lines = [], options = {}) {
+  const {
+    eyebrow = "Velura",
+    referenceLabel = "Booking reference",
+    referenceValue = "",
+    detailRows = [],
+    replyNote = "",
+    footerNote = "Luxury cleaning, gently delivered."
+  } = options;
   const body = lines
     .filter(Boolean)
-    .map((line) => `<p style="margin:0 0 12px;color:#4f463f;line-height:1.65;">${escapeHtml(line)}</p>`)
+    .map((line) => `<p style="margin:0 0 14px;color:#4f463f;font-size:15px;line-height:1.7;">${escapeHtml(line)}</p>`)
     .join("");
 
   return `
-    <div style="margin:0;padding:28px;background:#f8f3e8;font-family:Inter,Arial,sans-serif;color:#241f1a;">
-      <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e6ddd0;border-radius:12px;overflow:hidden;">
-        <div style="background:#16110e;padding:24px 28px;color:#ffffff;">
-          <p style="margin:0 0 6px;color:#dec06f;font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;">Velura</p>
-          <h1 style="margin:0;font-size:24px;line-height:1.25;">${escapeHtml(title)}</h1>
+    <div style="margin:0;padding:32px 16px;background:#f8f3e8;font-family:Inter,Arial,sans-serif;color:#241f1a;">
+      <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #eadfcc;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(36,31,26,0.08);">
+        <div style="background:#16110e;padding:30px 30px 26px;color:#ffffff;">
+          <p style="margin:0 0 8px;color:#dec06f;font-size:12px;font-weight:800;letter-spacing:0.18em;text-transform:uppercase;">${escapeHtml(eyebrow)}</p>
+          <h1 style="margin:0;max-width:560px;font-size:28px;line-height:1.22;font-weight:800;">${escapeHtml(title)}</h1>
+          ${
+            referenceValue
+              ? `<div style="display:inline-block;margin-top:18px;padding:10px 14px;border:1px solid rgba(222,192,111,0.55);border-radius:999px;background:rgba(222,192,111,0.12);">
+                  <span style="color:#dec06f;font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;">${escapeHtml(referenceLabel)}</span>
+                  <span style="margin-left:8px;color:#ffffff;font-size:14px;font-weight:800;">${escapeHtml(referenceValue)}</span>
+                </div>`
+              : ""
+          }
         </div>
-        <div style="padding:28px;">
+        <div style="padding:30px;">
           ${body}
-          <div style="margin-top:22px;padding-top:18px;border-top:1px solid #eee6da;">
-            <p style="margin:0;color:#8f6a52;font-weight:700;">Luxury cleaning, gently delivered.</p>
+          ${buildDetailRows(detailRows)}
+          ${
+            replyNote
+              ? `<div style="margin:22px 0 0;padding:16px 18px;border-radius:14px;background:#eef8f6;border:1px solid #cce8e2;">
+                  <p style="margin:0;color:#245b52;font-size:14px;font-weight:700;line-height:1.55;">${escapeHtml(replyNote)}</p>
+                </div>`
+              : ""
+          }
+          <div style="margin-top:26px;padding-top:20px;border-top:1px solid #eee6da;">
+            <p style="margin:0 0 4px;color:#241f1a;font-weight:800;">Velura</p>
+            <p style="margin:0;color:#8f6a52;font-weight:700;">${escapeHtml(footerNote)}</p>
           </div>
         </div>
       </div>
@@ -157,12 +241,8 @@ export async function sendLeadNotification(lead) {
   }
 
   const lines = [
-    `Name: ${lead.name}`,
-    `Email: ${lead.email}`,
-    `Phone: ${lead.phone || "Not provided"}`,
-    `Company: ${lead.company || "Not provided"}`,
-    `Service: ${lead.service}`,
-    "",
+    `A new Velura inquiry has arrived from ${lead.name}.`,
+    "Reply directly to this email to respond to the client.",
     lead.message
   ];
 
@@ -171,7 +251,17 @@ export async function sendLeadNotification(lead) {
     replyTo: lead.email,
     subject: `New ${lead.service} inquiry from ${lead.name}`,
     text: lines.join("\n"),
-    html: buildEmailHtml(`New inquiry from ${lead.name}`, lines)
+    html: buildEmailHtml(`New inquiry from ${lead.name}`, lines, {
+      eyebrow: "Velura inquiry",
+      detailRows: [
+        { label: "Name", value: lead.name },
+        { label: "Email", value: lead.email },
+        { label: "Phone", value: lead.phone || "Not provided" },
+        { label: "Company", value: lead.company || "Not provided" },
+        { label: "Service", value: lead.service }
+      ],
+      replyNote: `Replying to this email will reply to ${lead.email}.`
+    })
   });
 }
 
@@ -210,7 +300,7 @@ async function sendSms({ to, body }) {
 export async function sendBookingSmsConfirmation(booking) {
   return sendSms({
     to: booking.phone,
-    body: `Hello ${booking.clientName}, your Velura booking is set: ${bookingSummary(booking)}. Reply to this number if anything needs changing.`
+    body: `Hello ${booking.clientName}, your Velura booking ${bookingReference(booking)} is set: ${bookingSummary(booking)}. Reply to this number if anything needs changing.`
   });
 }
 
@@ -219,7 +309,7 @@ export async function sendBookingSmsStatusUpdate(booking, previousStatus) {
 
   return sendSms({
     to: booking.phone,
-    body: `Hello ${booking.clientName}, your Velura booking has been ${statusText}. Previous status: ${previousStatus || "not set"}. ${bookingSummary(booking)}.`
+    body: `Hello ${booking.clientName}, your Velura booking ${bookingReference(booking)} has been ${statusText}. Previous status: ${previousStatus || "not set"}. ${bookingSummary(booking)}.`
   });
 }
 
@@ -229,31 +319,44 @@ export async function sendBookingConfirmation(booking) {
     return { sent: false, reason: "Email provider not configured" };
   }
 
+  const reference = bookingReference(booking);
   const lines = [
     `Hello ${booking.clientName},`,
+    `Thank you for choosing Velura. Your cleaning booking is now in our diary under reference ${reference}.`,
+    "Our team will arrive prepared for the agreed service. If anything changes before the visit, just reply directly to this email."
+  ].filter(Boolean);
+  const detailRows = [
+    { label: "Booking reference", value: reference },
+    { label: "Service", value: booking.service },
+    { label: "Date and time", value: formatBookingDate(booking.scheduledFor) },
+    { label: "Estimated duration", value: formatDuration(booking.durationMinutes) },
+    { label: "Address", value: booking.address },
+    { label: "Access instructions", value: booking.accessInstructions },
+    { label: "Parking notes", value: booking.parkingNotes },
+    { label: "Booking notes", value: booking.notes }
+  ];
+  const textLines = [
+    ...lines,
     "",
-    "Thank you for choosing Velura. Your cleaning booking has been placed in our diary.",
+    ...detailRows.filter((row) => row.value).map((row) => `${row.label}: ${row.value}`),
     "",
-    `Service: ${booking.service}`,
-    `Date and time: ${formatBookingDate(booking.scheduledFor)}`,
-    `Estimated duration: ${booking.durationMinutes} minutes`,
-    `Address: ${booking.address}`,
-    booking.accessInstructions ? `Access instructions: ${booking.accessInstructions}` : "",
-    booking.parkingNotes ? `Parking notes: ${booking.parkingNotes}` : "",
-    "",
-    booking.notes ? `Notes: ${booking.notes}` : "",
-    "If anything needs changing, please reply to this email and our team will help.",
+    `Reply to this email and your message will go to ${env.smtp.contactTo}.`,
     "",
     "Velura",
     "Luxury cleaning, gently delivered"
-  ].filter(Boolean);
+  ];
 
   return sendEmail({
     to: booking.email,
     replyTo: env.smtp.contactTo,
-    subject: `Your Velura cleaning booking for ${formatBookingDate(booking.scheduledFor)}`,
-    text: lines.join("\n"),
-    html: buildEmailHtml("Your Velura booking", lines)
+    subject: `Velura booking ${reference} is confirmed`,
+    text: textLines.join("\n"),
+    html: buildEmailHtml("Your Velura booking is confirmed", lines, {
+      eyebrow: "Booking confirmation",
+      referenceValue: reference,
+      detailRows,
+      replyNote: `Need to make a change? Reply directly to this email and your message will go to ${env.smtp.contactTo}.`
+    })
   });
 }
 
@@ -263,34 +366,47 @@ export async function sendBookingStatusUpdate(booking, previousStatus) {
     return { sent: false, reason: "Email provider not configured" };
   }
 
+  const reference = bookingReference(booking);
   const statusText = booking.status === "completed" ? "completed" : `updated to ${booking.status}`;
   const lines = [
     `Hello ${booking.clientName},`,
-    "",
-    `Your Velura cleaning booking has been ${statusText}.`,
-    "",
-    `Previous status: ${previousStatus || "not set"}`,
-    `Current status: ${booking.status}`,
-    `Service: ${booking.service}`,
-    `Date and time: ${formatBookingDate(booking.scheduledFor)}`,
-    `Address: ${booking.address}`,
-    booking.accessInstructions ? `Access instructions: ${booking.accessInstructions}` : "",
-    booking.parkingNotes ? `Parking notes: ${booking.parkingNotes}` : "",
-    "",
+    `Your Velura booking ${reference} has been ${statusText}.`,
     booking.status === "completed"
       ? "Thank you for trusting Velura with your space. We hope everything feels beautifully refreshed."
-      : "Please reply to this email if you need anything adjusted.",
+      : "Please reply to this email if you need anything adjusted."
+  ].filter(Boolean);
+  const detailRows = [
+    { label: "Booking reference", value: reference },
+    { label: "Previous status", value: previousStatus || "Not set" },
+    { label: "Current status", value: humanStatus(booking.status) },
+    { label: "Service", value: booking.service },
+    { label: "Date and time", value: formatBookingDate(booking.scheduledFor) },
+    { label: "Address", value: booking.address },
+    { label: "Access instructions", value: booking.accessInstructions },
+    { label: "Parking notes", value: booking.parkingNotes }
+  ];
+  const textLines = [
+    ...lines,
+    "",
+    ...detailRows.filter((row) => row.value).map((row) => `${row.label}: ${row.value}`),
+    "",
+    `Reply to this email and your message will go to ${env.smtp.contactTo}.`,
     "",
     "Velura",
     "Luxury cleaning, gently delivered"
-  ].filter(Boolean);
+  ];
 
   return sendEmail({
     to: booking.email,
     replyTo: env.smtp.contactTo,
-    subject: `Your Velura booking has been ${statusText}`,
-    text: lines.join("\n"),
-    html: buildEmailHtml(`Your booking has been ${statusText}`, lines)
+    subject: `Velura booking ${reference} has been ${statusText}`,
+    text: textLines.join("\n"),
+    html: buildEmailHtml(`Your booking has been ${statusText}`, lines, {
+      eyebrow: "Booking update",
+      referenceValue: reference,
+      detailRows,
+      replyNote: `Questions about this update? Reply directly to this email and your message will go to ${env.smtp.contactTo}.`
+    })
   });
 }
 
@@ -300,29 +416,42 @@ export async function sendBookingTeamNotification(booking, eventLabel = "created
     return { sent: false, reason: "Email provider not configured" };
   }
 
+  const reference = bookingReference(booking);
   const lines = [
-    `Booking ${eventLabel}`,
-    "",
-    `Client: ${booking.clientName}`,
-    `Email: ${booking.email}`,
-    `Phone: ${booking.phone || "Not provided"}`,
-    `Service: ${booking.service}`,
-    `Date and time: ${formatBookingDate(booking.scheduledFor)}`,
-    `Duration: ${booking.durationMinutes} minutes`,
-    `Address: ${booking.address}`,
-    `Status: ${booking.status}`,
-    `Preferred contact: ${booking.communicationPreference}`,
-    booking.accessInstructions ? `Access instructions: ${booking.accessInstructions}` : "",
-    booking.parkingNotes ? `Parking notes: ${booking.parkingNotes}` : "",
-    "",
-    booking.notes ? `Notes: ${booking.notes}` : ""
+    `Booking ${eventLabel}: ${reference}`,
+    "Reply directly to this email if you want to respond to the client."
   ].filter(Boolean);
+  const detailRows = [
+    { label: "Booking reference", value: reference },
+    { label: "Client", value: booking.clientName },
+    { label: "Email", value: booking.email },
+    { label: "Phone", value: booking.phone || "Not provided" },
+    { label: "Service", value: booking.service },
+    { label: "Date and time", value: formatBookingDate(booking.scheduledFor) },
+    { label: "Duration", value: formatDuration(booking.durationMinutes) },
+    { label: "Address", value: booking.address },
+    { label: "Status", value: humanStatus(booking.status) },
+    { label: "Preferred contact", value: booking.communicationPreference },
+    { label: "Access instructions", value: booking.accessInstructions },
+    { label: "Parking notes", value: booking.parkingNotes },
+    { label: "Booking notes", value: booking.notes }
+  ];
+  const textLines = [
+    ...lines,
+    "",
+    ...detailRows.filter((row) => row.value).map((row) => `${row.label}: ${row.value}`)
+  ];
 
   return sendEmail({
     to: env.smtp.contactTo,
     replyTo: booking.email,
-    subject: `Velura booking ${eventLabel}: ${booking.clientName}`,
-    text: lines.join("\n"),
-    html: buildEmailHtml(`Booking ${eventLabel}`, lines)
+    subject: `[${reference}] Velura booking ${eventLabel}: ${booking.clientName}`,
+    text: textLines.join("\n"),
+    html: buildEmailHtml(`Booking ${eventLabel}`, lines, {
+      eyebrow: "Manager booking alert",
+      referenceValue: reference,
+      detailRows,
+      replyNote: `Replying to this email will reply to ${booking.email}.`
+    })
   });
 }

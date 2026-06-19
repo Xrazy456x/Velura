@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { useFileDatabase } from "../config/database.js";
 import Booking from "../models/Booking.js";
+import Counter from "../models/Counter.js";
 import Employee from "../models/Employee.js";
 import Lead from "../models/Lead.js";
 import { recordAuditEvent } from "../services/auditService.js";
@@ -15,6 +16,27 @@ import * as fileStore from "../services/fileStore.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const bookingStatuses = ["scheduled", "confirmed", "completed", "cancelled"];
+
+function bookingNumberYear(value = new Date()) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date().getFullYear() : date.getFullYear();
+}
+
+async function createBookingNumber(scheduledFor) {
+  const year = bookingNumberYear(scheduledFor);
+
+  if (useFileDatabase()) {
+    return fileStore.nextBookingNumber(year);
+  }
+
+  const counter = await Counter.findOneAndUpdate(
+    { key: `bookings:${year}` },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+
+  return `VEL-${year}-${String(counter.seq).padStart(4, "0")}`;
+}
 
 const bookingBodySchema = z.object({
   leadId: z.string().trim().optional().or(z.literal("")),
@@ -143,6 +165,7 @@ async function updateBookingRecord(id, updates) {
 function normalizeBookingPayload(payload, req, lead, employees = []) {
   return {
     lead: lead?._id || null,
+    bookingNumber: payload.bookingNumber,
     clientName: payload.clientName,
     email: payload.email,
     phone: payload.phone,
@@ -224,7 +247,15 @@ export const createBooking = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "One or more assigned cleaners could not be found." });
   }
 
-  const bookingPayload = normalizeBookingPayload(payload, req, lead, employees);
+  const bookingPayload = normalizeBookingPayload(
+    {
+      ...payload,
+      bookingNumber: await createBookingNumber(payload.scheduledFor)
+    },
+    req,
+    lead,
+    employees
+  );
   let booking = useFileDatabase() ? await fileStore.createBooking(bookingPayload) : await Booking.create(bookingPayload);
   let clientCommunication = { sent: false, reason: "Client confirmation not requested" };
 
@@ -255,6 +286,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     summary: `Booking created for ${booking.clientName} on ${new Date(booking.scheduledFor).toLocaleString("en-GB")}.`,
     metadata: {
       booking: {
+        bookingNumber: booking.bookingNumber,
         clientName: booking.clientName,
         email: booking.email,
         service: booking.service,

@@ -182,6 +182,19 @@ function formatBookingTime(value) {
   });
 }
 
+function bookingReference(booking) {
+  if (booking?.bookingNumber) {
+    return booking.bookingNumber;
+  }
+
+  const fallback = String(booking?._id || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(-6);
+
+  return fallback ? `VEL-${fallback}` : "VEL-BOOKING";
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("leads");
@@ -1311,7 +1324,7 @@ function BookingCalendar({ bookingsByDate, days, selectedDate, visibleMonth, onM
                         className={`truncate rounded-md px-2 py-1 text-xs font-bold ${calendarStatusClass(booking.status)}`}
                         key={booking._id}
                       >
-                        {formatBookingTime(booking.scheduledFor)} {booking.clientName}
+                        {formatBookingTime(booking.scheduledFor)} {bookingReference(booking)} {booking.clientName}
                       </span>
                     ))}
                     {dayBookings.length > 3 && (
@@ -1356,6 +1369,9 @@ function SelectedDaySchedule({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-lg font-extrabold text-coal">{booking.clientName}</p>
+                    <span className="rounded-full bg-gold/15 px-2.5 py-1 text-xs font-extrabold text-berry">
+                      {bookingReference(booking)}
+                    </span>
                     <StatusBadge value={booking.status} />
                   </div>
                   <p className="mt-1 font-semibold text-stone-600">{booking.service}</p>
@@ -1470,6 +1486,9 @@ function RecentlyDeletedBookings({ bookings, onRestore }) {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-extrabold text-coal">{booking.clientName}</p>
+                  <span className="rounded-full bg-gold/15 px-2.5 py-1 text-xs font-extrabold text-berry">
+                    {bookingReference(booking)}
+                  </span>
                   <StatusBadge value={booking.status} />
                 </div>
                 <p className="mt-1 text-sm font-semibold text-stone-600">

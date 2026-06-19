@@ -37,6 +37,15 @@ const bookingSchema = new mongoose.Schema(
       ref: "Lead",
       index: true
     },
+    bookingNumber: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      unique: true,
+      sparse: true,
+      index: true,
+      maxlength: 20
+    },
     clientName: {
       type: String,
       required: true,
@@ -137,5 +146,6 @@ const bookingSchema = new mongoose.Schema(
 
 bookingSchema.index({ createdAt: -1 });
 bookingSchema.index({ status: 1, scheduledFor: 1 });
+bookingSchema.index({ bookingNumber: 1, deletedAt: 1 });
 
 export default mongoose.model("Booking", bookingSchema);

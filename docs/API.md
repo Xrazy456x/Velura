@@ -194,6 +194,8 @@ Creates a booking. `leadId` is optional, so managers can create a booking from a
 }
 ```
 
+The API generates `bookingNumber` automatically, for example `VEL-2026-0001`. Managers do not enter this manually.
+
 Allowed communication preferences: `email`, `sms`, `phone`.
 
 Email uses Resend when `RESEND_API_KEY` is configured, with SMTP as a fallback. SMS uses Twilio settings. Phone-call follow-up is logged for manual action.

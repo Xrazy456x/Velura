@@ -148,6 +148,7 @@ async function main() {
       },
       {
         lead: idMaps.leads.get(booking.lead) || null,
+        bookingNumber: booking.bookingNumber || undefined,
         clientName: booking.clientName,
         email: booking.email,
         phone: booking.phone || "",
