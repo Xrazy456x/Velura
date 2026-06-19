@@ -290,6 +290,53 @@ Manager only. Moves a booking to Recently deleted and records the action in the 
 
 Manager only. Restores a recently deleted booking to the active booking calendar.
 
+## Invoices
+
+Manager only. Invoices are created from active bookings and stored in MongoDB.
+
+`GET /invoices`
+
+Returns saved invoice records.
+
+`POST /invoices`
+
+Creates an invoice, generates a number such as `INV-2026-0001`, snapshots the booking/client details, calculates VAT and totals, and stores the record.
+
+```json
+{
+  "bookingId": "booking-id",
+  "issueDate": "2026-06-20",
+  "dueDate": "2026-07-04",
+  "status": "draft",
+  "paymentInstructions": "Please pay by bank transfer to the Velura Services Tide account. Use the invoice number as the payment reference.",
+  "notes": "Thank you for choosing Velura Services.",
+  "lineItems": [
+    {
+      "description": "Deep cleaning service",
+      "quantity": 1,
+      "unitPrice": 150,
+      "vatRate": 0
+    }
+  ]
+}
+```
+
+Allowed statuses: `draft`, `sent`, `paid`, `void`.
+
+`PATCH /invoices/:id/status`
+
+Updates invoice status.
+
+```json
+{
+  "status": "paid"
+}
+```
+
+`GET /invoices/:id/pdf`
+
+Downloads the generated invoice PDF. Managers can upload or match this PDF in Tide.
+
 ## Employees
 
 Manager only.

@@ -6,13 +6,16 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Download,
   Edit3,
+  FileText,
   History,
   KeyRound,
   Loader2,
   Mail,
   MapPin,
   PhoneCall,
+  Plus,
   RefreshCw,
   Search,
   Send,
@@ -33,8 +36,10 @@ const tabs = [
   { key: "leads", label: "Inquiries" },
   { key: "quotes", label: "Quote review" },
   { key: "bookings", label: "Bookings" },
+  { key: "invoices", label: "Invoices" },
   { key: "employees", label: "Employees" },
   { key: "pricing", label: "Pricing" },
+  { key: "reviews", label: "Reviews" },
   { key: "users", label: "Accounts" },
   { key: "audit", label: "Audit" }
 ];
@@ -183,6 +188,63 @@ function formatBookingTime(value) {
   });
 }
 
+function formatDateInput(value = new Date()) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function addDays(value, days) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function createInitialInvoiceForm() {
+  const today = new Date();
+
+  return {
+    bookingId: "",
+    issueDate: formatDateInput(today),
+    dueDate: formatDateInput(addDays(today, 14)),
+    status: "draft",
+    paymentInstructions:
+      "Please pay by bank transfer to the Velura Services Tide account. Use the invoice number as the payment reference.",
+    notes: "",
+    lineItems: [{ description: "", quantity: "1", unitPrice: "", vatRate: "0" }]
+  };
+}
+
+function formatCurrency(value, currency = "GBP") {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency
+  }).format(Number(value) || 0);
+}
+
+function calculateInvoiceTotals(lineItems = []) {
+  return lineItems.reduce(
+    (totals, item) => {
+      const quantity = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unitPrice) || 0;
+      const vatRate = Number(item.vatRate) || 0;
+      const amount = quantity * unitPrice;
+      const vat = amount * (vatRate / 100);
+
+      return {
+        subtotal: totals.subtotal + amount,
+        vatTotal: totals.vatTotal + vat,
+        total: totals.total + amount + vat
+      };
+    },
+    { subtotal: 0, vatTotal: 0, total: 0 }
+  );
+}
+
 function bookingReference(booking) {
   if (booking?.bookingNumber) {
     return booking.bookingNumber;
@@ -205,9 +267,11 @@ export default function Dashboard() {
   const [leads, setLeads] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [deletedBookings, setDeletedBookings] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [pricing, setPricing] = useState(null);
   const [quoteRequests, setQuoteRequests] = useState([]);
+  const [googleReviews, setGoogleReviews] = useState([]);
   const [reviewsMeta, setReviewsMeta] = useState(null);
   const [auditEvents, setAuditEvents] = useState([]);
   const [bookingForm, setBookingForm] = useState(() => createInitialBookingForm());
@@ -215,6 +279,10 @@ export default function Dashboard() {
   const [bookingAction, setBookingAction] = useState("idle");
   const [editingBookingId, setEditingBookingId] = useState("");
   const [bookingFocusDate, setBookingFocusDate] = useState("");
+  const [invoiceForm, setInvoiceForm] = useState(() => createInitialInvoiceForm());
+  const [invoiceStatus, setInvoiceStatus] = useState("idle");
+  const [invoiceAction, setInvoiceAction] = useState("idle");
+  const [reviewAction, setReviewAction] = useState("idle");
   const [managerForm, setManagerForm] = useState(initialManagerForm);
   const [managerStatus, setManagerStatus] = useState("idle");
   const [passwordForm, setPasswordForm] = useState(initialPasswordForm);
@@ -234,6 +302,11 @@ export default function Dashboard() {
 
     setBookings(bookingsResponse.data.bookings || []);
     setDeletedBookings(deletedBookingsResponse.data.bookings || []);
+  }
+
+  async function loadInvoiceRecords() {
+    const { data } = await apiClient.get("/invoices");
+    setInvoices(data.invoices || []);
   }
 
   async function loadEmployeeRecords() {
@@ -256,6 +329,7 @@ export default function Dashboard() {
         leadsResponse,
         bookingsResponse,
         deletedBookingsResponse,
+        invoicesResponse,
         employeesResponse,
         pricingResponse,
         quoteRequestsResponse,
@@ -266,6 +340,7 @@ export default function Dashboard() {
         apiClient.get("/leads"),
         apiClient.get("/bookings"),
         apiClient.get("/bookings/deleted"),
+        apiClient.get("/invoices"),
         apiClient.get("/employees"),
         apiClient.get("/quote/pricing"),
         apiClient.get("/quote/requests"),
@@ -277,9 +352,11 @@ export default function Dashboard() {
       setLeads(leadsResponse.data.leads || []);
       setBookings(bookingsResponse.data.bookings || []);
       setDeletedBookings(deletedBookingsResponse.data.bookings || []);
+      setInvoices(invoicesResponse.data.invoices || []);
       setEmployees(employeesResponse.data.employees || []);
       setPricing(pricingResponse.data.pricing || null);
       setQuoteRequests(quoteRequestsResponse.data.quoteRequests || []);
+      setGoogleReviews(reviewsResponse.data.reviews || []);
       setReviewsMeta(reviewsResponse.data.meta || null);
       setAuditEvents(auditResponse.data.auditEvents || []);
       setStatus("ready");
@@ -298,13 +375,14 @@ export default function Dashboard() {
       { label: "Managers", value: users.filter((account) => account.role === "admin").length, icon: UsersRound, tone: "leaf" },
       { label: "Inquiries", value: leads.length, icon: ClipboardList, tone: "coral" },
       { label: "Bookings", value: bookings.length, icon: CalendarCheck, tone: "leaf" },
+      { label: "Invoices", value: invoices.length, icon: FileText, tone: "coal" },
       { label: "Deleted", value: deletedBookings.length, icon: Trash2, tone: "berry" },
       { label: "Cleaners", value: employees.length, icon: UsersRound, tone: "coral" },
       { label: "Quote reviews", value: quoteRequests.length, icon: Mail, tone: "berry" },
       { label: "Google rating", value: reviewsMeta?.averageRating ? Number(reviewsMeta.averageRating).toFixed(1) : "N/A", icon: Star, tone: "coal" },
       { label: "Audit events", value: auditEvents.length, icon: History, tone: "leaf" }
     ],
-    [auditEvents.length, bookings.length, deletedBookings.length, employees.length, leads.length, quoteRequests.length, reviewsMeta, users]
+    [auditEvents.length, bookings.length, deletedBookings.length, employees.length, invoices.length, leads.length, quoteRequests.length, reviewsMeta, users]
   );
 
   async function updateLeadStatus(leadId, nextStatus) {
@@ -508,6 +586,133 @@ export default function Dashboard() {
       setError(getApiError(requestError, "Phone confirmation could not be recorded."));
     } finally {
       setBookingAction("idle");
+    }
+  }
+
+  function updateInvoiceForm(event) {
+    const { name, value } = event.target;
+    setInvoiceStatus("idle");
+
+    if (name === "bookingId") {
+      const selectedBooking = bookings.find((booking) => booking._id === value);
+
+      setInvoiceForm((current) => ({
+        ...current,
+        bookingId: value,
+        lineItems: current.lineItems.map((item, index) =>
+          index === 0 && !item.description.trim()
+            ? {
+                ...item,
+                description: selectedBooking ? `${selectedBooking.service} - ${bookingReference(selectedBooking)}` : item.description
+              }
+            : item
+        )
+      }));
+      return;
+    }
+
+    setInvoiceForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateInvoiceLineItem(index, field, value) {
+    setInvoiceStatus("idle");
+    setInvoiceForm((current) => ({
+      ...current,
+      lineItems: current.lineItems.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item))
+    }));
+  }
+
+  function addInvoiceLineItem() {
+    setInvoiceForm((current) => ({
+      ...current,
+      lineItems: [...current.lineItems, { description: "", quantity: "1", unitPrice: "", vatRate: "0" }]
+    }));
+  }
+
+  function removeInvoiceLineItem(index) {
+    setInvoiceForm((current) => ({
+      ...current,
+      lineItems: current.lineItems.filter((_, itemIndex) => itemIndex !== index)
+    }));
+  }
+
+  async function createInvoice(event) {
+    event.preventDefault();
+    setError("");
+    setInvoiceStatus("submitting");
+
+    try {
+      const payload = {
+        ...invoiceForm,
+        lineItems: invoiceForm.lineItems.map((item) => ({
+          description: item.description,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+          vatRate: Number(item.vatRate)
+        }))
+      };
+      const { data } = await apiClient.post("/invoices", payload);
+
+      setInvoices((current) => [data.invoice, ...current]);
+      setInvoiceForm(createInitialInvoiceForm());
+      setInvoiceStatus("success");
+      await Promise.allSettled([loadInvoiceRecords(), loadAuditEvents()]);
+    } catch (requestError) {
+      setInvoiceStatus("error");
+      setError(getApiError(requestError, "Invoice could not be created."));
+    }
+  }
+
+  async function updateInvoiceStatus(invoiceId, nextStatus) {
+    const previous = invoices;
+    setInvoices((current) =>
+      current.map((invoice) => (invoice._id === invoiceId ? { ...invoice, status: nextStatus } : invoice))
+    );
+
+    try {
+      const { data } = await apiClient.patch(`/invoices/${invoiceId}/status`, { status: nextStatus });
+      setInvoices((current) => current.map((invoice) => (invoice._id === invoiceId ? data.invoice : invoice)));
+      await loadAuditEvents();
+    } catch (requestError) {
+      setInvoices(previous);
+      setError(getApiError(requestError, "Invoice status could not be updated."));
+    }
+  }
+
+  async function downloadInvoicePdf(invoice) {
+    setError("");
+    setInvoiceAction(`pdf:${invoice._id}`);
+
+    try {
+      const { data } = await apiClient.get(`/invoices/${invoice._id}/pdf`, { responseType: "blob" });
+      const blob = new Blob([data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${invoice.invoiceNumber || "velura-invoice"}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (requestError) {
+      setError(getApiError(requestError, "Invoice PDF could not be downloaded."));
+    } finally {
+      setInvoiceAction("idle");
+    }
+  }
+
+  async function refreshGoogleReviews() {
+    setError("");
+    setReviewAction("refreshing");
+
+    try {
+      const { data } = await apiClient.post("/reviews/refresh");
+      setGoogleReviews(data.reviews || []);
+      setReviewsMeta(data.meta || null);
+    } catch (requestError) {
+      setError(getApiError(requestError, "Google reviews could not be refreshed. Check the Places API key and Place ID."));
+    } finally {
+      setReviewAction("idle");
     }
   }
 
@@ -755,14 +960,14 @@ export default function Dashboard() {
 
       {error && <div className="mt-6 rounded-lg bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</div>}
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9">
         {stats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>
 
       <div className="mt-8 rounded-lg border border-stone-200 bg-white p-2">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-9">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -812,6 +1017,22 @@ export default function Dashboard() {
               onStatusChange={updateBookingStatus}
             />
           )}
+          {activeTab === "invoices" && (
+            <InvoicePanel
+              actionStatus={invoiceAction}
+              bookings={bookings}
+              form={invoiceForm}
+              invoices={invoices}
+              status={invoiceStatus}
+              onAddLineItem={addInvoiceLineItem}
+              onChange={updateInvoiceForm}
+              onDownloadPdf={downloadInvoicePdf}
+              onLineItemChange={updateInvoiceLineItem}
+              onRemoveLineItem={removeInvoiceLineItem}
+              onStatusChange={updateInvoiceStatus}
+              onSubmit={createInvoice}
+            />
+          )}
           {activeTab === "employees" && (
             <EmployeePanel
               employees={employees}
@@ -824,6 +1045,9 @@ export default function Dashboard() {
             />
           )}
           {activeTab === "pricing" && <PricingPanel pricing={pricing} />}
+          {activeTab === "reviews" && (
+            <ReviewsPanel meta={reviewsMeta} reviews={googleReviews} status={reviewAction} onRefresh={refreshGoogleReviews} />
+          )}
           {activeTab === "users" && (
             <div className="grid gap-6">
               <PasswordChangePanel
@@ -854,6 +1078,255 @@ export default function Dashboard() {
         </div>
       )}
     </section>
+  );
+}
+
+function InvoicePanel({
+  actionStatus,
+  bookings,
+  form,
+  invoices,
+  status,
+  onAddLineItem,
+  onChange,
+  onDownloadPdf,
+  onLineItemChange,
+  onRemoveLineItem,
+  onStatusChange,
+  onSubmit
+}) {
+  const totals = calculateInvoiceTotals(form.lineItems);
+  const selectedBooking = bookings.find((booking) => booking._id === form.bookingId);
+
+  return (
+    <div className="grid gap-6">
+      <form className="panel grid gap-4 p-5" onSubmit={onSubmit}>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="eyebrow">Manager only</p>
+            <h2 className="mt-1 text-2xl font-extrabold text-coal">Create invoice</h2>
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-stone-500">
+              Build a PDF invoice from a booking, save it to MongoDB, then upload or match the PDF inside Tide.
+            </p>
+          </div>
+          <div className="rounded-lg border border-stone-200 bg-mist px-4 py-3">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-stone-500">Total preview</p>
+            <p className="mt-1 text-2xl font-extrabold text-coal">{formatCurrency(totals.total)}</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-4">
+          <label className="grid gap-2 text-sm font-bold text-coal lg:col-span-2">
+            Booking
+            <select className="input-field" name="bookingId" value={form.bookingId} onChange={onChange} required>
+              <option value="">Choose booking</option>
+              {bookings.map((booking) => (
+                <option value={booking._id} key={booking._id}>
+                  {bookingReference(booking)} - {booking.clientName} - {booking.service}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-coal">
+            Issue date
+            <input className="input-field" type="date" name="issueDate" value={form.issueDate} onChange={onChange} required />
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-coal">
+            Due date
+            <input className="input-field" type="date" name="dueDate" value={form.dueDate} onChange={onChange} required />
+          </label>
+        </div>
+
+        {selectedBooking && (
+          <div className="rounded-lg border border-stone-200 bg-mist p-4 text-sm font-semibold text-stone-600">
+            <p className="font-extrabold text-coal">{selectedBooking.clientName}</p>
+            <p className="mt-1">
+              {selectedBooking.email} {selectedBooking.phone ? `| ${selectedBooking.phone}` : ""}
+            </p>
+            <p className="mt-1">{selectedBooking.address}</p>
+          </div>
+        )}
+
+        <div className="grid gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-extrabold text-coal">Line items</h3>
+            <button className="button-secondary px-3 py-2" type="button" onClick={onAddLineItem}>
+              <Plus size={16} aria-hidden="true" />
+              Add line
+            </button>
+          </div>
+
+          {form.lineItems.map((item, index) => (
+            <div className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4 lg:grid-cols-[1fr_90px_120px_100px_auto]" key={index}>
+              <label className="grid gap-2 text-sm font-bold text-coal">
+                Description
+                <input
+                  className="input-field"
+                  value={item.description}
+                  onChange={(event) => onLineItemChange(index, "description", event.target.value)}
+                  placeholder="Cleaning service"
+                  required
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-bold text-coal">
+                Qty
+                <input
+                  className="input-field"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={item.quantity}
+                  onChange={(event) => onLineItemChange(index, "quantity", event.target.value)}
+                  required
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-bold text-coal">
+                Unit price
+                <input
+                  className="input-field"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={item.unitPrice}
+                  onChange={(event) => onLineItemChange(index, "unitPrice", event.target.value)}
+                  placeholder="0.00"
+                  required
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-bold text-coal">
+                VAT %
+                <input
+                  className="input-field"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={item.vatRate}
+                  onChange={(event) => onLineItemChange(index, "vatRate", event.target.value)}
+                />
+              </label>
+              <button
+                className="button-secondary self-end px-3 py-2 text-rose-700"
+                type="button"
+                onClick={() => onRemoveLineItem(index)}
+                disabled={form.lineItems.length === 1}
+              >
+                <Trash2 size={16} aria-hidden="true" />
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="grid gap-4">
+            <label className="grid gap-2 text-sm font-bold text-coal">
+              Payment instructions
+              <textarea
+                className="input-field min-h-28 resize-none"
+                name="paymentInstructions"
+                value={form.paymentInstructions}
+                onChange={onChange}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-bold text-coal">
+              Invoice notes
+              <textarea className="input-field min-h-24 resize-none" name="notes" value={form.notes} onChange={onChange} />
+            </label>
+          </div>
+
+          <div className="rounded-lg border border-stone-200 bg-mist p-4">
+            <div className="grid gap-3 text-sm font-bold text-stone-600">
+              <div className="flex justify-between gap-3">
+                <span>Subtotal</span>
+                <span>{formatCurrency(totals.subtotal)}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span>VAT</span>
+                <span>{formatCurrency(totals.vatTotal)}</span>
+              </div>
+              <div className="flex justify-between gap-3 border-t border-stone-300 pt-3 text-lg text-coal">
+                <span>Total</span>
+                <span>{formatCurrency(totals.total)}</span>
+              </div>
+            </div>
+            <button className="button-primary mt-5 w-full" type="submit" disabled={status === "submitting"}>
+              {status === "submitting" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <FileText size={18} aria-hidden="true" />}
+              Create invoice
+            </button>
+          </div>
+        </div>
+
+        {status === "success" && (
+          <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+            Invoice created and saved to MongoDB.
+          </p>
+        )}
+        {status === "error" && (
+          <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+            Invoice could not be created. Check the message at the top of the dashboard.
+          </p>
+        )}
+      </form>
+
+      <section className="panel p-5">
+        <div>
+          <p className="eyebrow">Invoice records</p>
+          <h2 className="mt-1 text-2xl font-extrabold text-coal">Saved invoices</h2>
+          <p className="mt-2 text-sm font-semibold text-stone-500">
+            Download a PDF for Tide, and update the status when it is sent, paid, or void.
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-4">
+          {invoices.map((invoice) => (
+            <article className="rounded-lg border border-stone-200 bg-white p-4" key={invoice._id}>
+              <div className="grid gap-4 lg:grid-cols-[1fr_160px_170px_auto] lg:items-center">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-extrabold text-coal">{invoice.invoiceNumber}</p>
+                    <span className="rounded-full bg-gold/15 px-2.5 py-1 text-xs font-extrabold text-berry">
+                      {invoice.bookingReference || "Booking"}
+                    </span>
+                    <StatusBadge value={invoice.status} />
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-stone-600">
+                    {invoice.clientName} - {invoice.service}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-stone-500">
+                    Due {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString("en-GB") : "not set"}
+                  </p>
+                </div>
+                <p className="text-xl font-extrabold text-coal">{formatCurrency(invoice.total, invoice.currency || "GBP")}</p>
+                <select
+                  className="input-field"
+                  value={invoice.status}
+                  onChange={(event) => onStatusChange(invoice._id, event.target.value)}
+                >
+                  <option value="draft">draft</option>
+                  <option value="sent">sent</option>
+                  <option value="paid">paid</option>
+                  <option value="void">void</option>
+                </select>
+                <button className="button-secondary px-3 py-2" type="button" onClick={() => onDownloadPdf(invoice)}>
+                  {actionStatus === `pdf:${invoice._id}` ? (
+                    <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+                  ) : (
+                    <Download size={16} aria-hidden="true" />
+                  )}
+                  PDF
+                </button>
+              </div>
+            </article>
+          ))}
+          {invoices.length === 0 && (
+            <div className="rounded-lg border border-dashed border-stone-300 bg-mist p-5 text-sm font-semibold text-stone-500">
+              No invoices created yet.
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -1105,6 +1578,87 @@ function PricingPanel({ pricing }) {
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function ReviewsPanel({ meta, reviews, status, onRefresh }) {
+  const configured = Boolean(meta?.configured);
+  const fetchedLabel = meta?.fetchedAt ? new Date(meta.fetchedAt).toLocaleString("en-GB") : "Not refreshed yet";
+
+  return (
+    <div className="grid gap-6">
+      <section className="panel p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="eyebrow">Google Reviews</p>
+            <h2 className="mt-1 text-2xl font-extrabold text-coal">Review connection</h2>
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-stone-500">
+              Add the Google Places API key and Place ID in Render, then refresh here to cache the latest available reviews in MongoDB.
+            </p>
+          </div>
+          <button className="button-primary" type="button" onClick={onRefresh} disabled={status === "refreshing" || !configured}>
+            {status === "refreshing" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
+            Refresh reviews
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-4">
+          <div className="rounded-lg border border-stone-200 bg-mist p-4">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-stone-500">Status</p>
+            <p className="mt-2 text-lg font-extrabold text-coal">{configured ? "Connected" : "Not connected"}</p>
+          </div>
+          <div className="rounded-lg border border-stone-200 bg-mist p-4">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-stone-500">Rating</p>
+            <p className="mt-2 text-lg font-extrabold text-coal">
+              {meta?.averageRating ? Number(meta.averageRating).toFixed(1) : "N/A"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-stone-200 bg-mist p-4">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-stone-500">Review count</p>
+            <p className="mt-2 text-lg font-extrabold text-coal">{meta?.userRatingCount || "N/A"}</p>
+          </div>
+          <div className="rounded-lg border border-stone-200 bg-mist p-4">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-stone-500">Last cached</p>
+            <p className="mt-2 text-sm font-extrabold text-coal">{fetchedLabel}</p>
+          </div>
+        </div>
+
+        {!configured && (
+          <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800">
+            Add `GOOGLE_PLACES_API_KEY` and `GOOGLE_PLACE_ID` to Render, then redeploy the API. Use only the Place ID value, not the full
+            `places/...` path.
+          </div>
+        )}
+      </section>
+
+      <section className="panel p-5">
+        <div>
+          <p className="eyebrow">Cached reviews</p>
+          <h2 className="mt-1 text-2xl font-extrabold text-coal">Latest Google review cards</h2>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {reviews.map((review) => (
+            <article className="rounded-lg border border-stone-200 bg-white p-4" key={review._id || review.googleReviewName}>
+              <div className="flex items-center gap-1 text-gold">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <Star key={index} size={15} fill={index < Math.round(review.rating || 0) ? "currentColor" : "none"} aria-hidden="true" />
+                ))}
+              </div>
+              <p className="mt-3 line-clamp-5 text-sm font-semibold leading-6 text-stone-600">
+                {review.comment || "Rating submitted without a written comment."}
+              </p>
+              <p className="mt-4 font-extrabold text-coal">{review.authorName || "Google user"}</p>
+              <p className="text-xs font-bold text-stone-500">{review.relativePublishTimeDescription || "Google review"}</p>
+            </article>
+          ))}
+          {reviews.length === 0 && (
+            <div className="rounded-lg border border-dashed border-stone-300 bg-mist p-5 text-sm font-semibold text-stone-500 md:col-span-2 xl:col-span-3">
+              No cached Google reviews yet.
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

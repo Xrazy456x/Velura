@@ -13,6 +13,7 @@ users        Account logins, manager/user roles, hashed passwords
 leads        Contact form inquiries and customer enquiry details
 quoteRequests Quote review records linked to submitted instant quotes
 bookings     Calendar jobs, client details, address, access notes, parking notes, assigned cleaners, status, communication log
+invoices     Invoice numbers, booking snapshots, line items, VAT totals, PDF download data, payment status
 employees    Cleaner/team profiles, skills, availability notes
 reviews      Cached Google reviews
 auditevents  Manager actions and operational audit history

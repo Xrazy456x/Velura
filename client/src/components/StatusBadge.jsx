@@ -10,6 +10,10 @@ const variants = {
   confirmed: "bg-lime-100 text-lime-800 ring-lime-200",
   completed: "bg-coal text-white ring-coal/20",
   cancelled: "bg-rose-100 text-rose-800 ring-rose-200",
+  draft: "bg-stone-200 text-stone-700 ring-stone-300",
+  sent: "bg-sky-100 text-sky-800 ring-sky-200",
+  paid: "bg-lime-100 text-lime-800 ring-lime-200",
+  void: "bg-rose-100 text-rose-800 ring-rose-200",
   active: "bg-lime-100 text-lime-800 ring-lime-200",
   inactive: "bg-rose-100 text-rose-800 ring-rose-200"
 };

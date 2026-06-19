@@ -11,6 +11,7 @@ const emptyDatabase = {
   messages: [],
   quoteRequests: [],
   bookings: [],
+  invoices: [],
   employees: [],
   reviews: [],
   auditEvents: []
@@ -62,6 +63,7 @@ async function readDatabase() {
     messages: parsed.messages || [],
     quoteRequests: parsed.quoteRequests || [],
     bookings: parsed.bookings || [],
+    invoices: parsed.invoices || [],
     employees: parsed.employees || [],
     reviews: parsed.reviews || [],
     auditEvents: parsed.auditEvents || []
@@ -421,6 +423,81 @@ export async function restoreBooking(id) {
     booking.deletedBy = null;
     booking.updatedAt = now();
     return booking;
+  });
+}
+
+export async function nextInvoiceNumber(year) {
+  return updateDatabase((database) => {
+    const prefix = `INV-${year}-`;
+    const latest = database.invoices.reduce((max, invoice) => {
+      const current = String(invoice.invoiceNumber || "");
+
+      if (!current.startsWith(prefix)) {
+        return max;
+      }
+
+      const numericPart = Number(current.replace(prefix, ""));
+      return Number.isFinite(numericPart) ? Math.max(max, numericPart) : max;
+    }, 0);
+
+    return `${prefix}${String(latest + 1).padStart(4, "0")}`;
+  });
+}
+
+export async function createInvoice(payload) {
+  return updateDatabase((database) => {
+    const timestamp = now();
+    const invoice = {
+      _id: randomUUID(),
+      booking: payload.booking,
+      invoiceNumber: payload.invoiceNumber,
+      bookingReference: payload.bookingReference || "",
+      status: payload.status || "draft",
+      clientName: payload.clientName,
+      email: payload.email.toLowerCase(),
+      phone: payload.phone || "",
+      billingAddress: payload.billingAddress,
+      service: payload.service,
+      bookingDate: payload.bookingDate instanceof Date ? payload.bookingDate.toISOString() : payload.bookingDate,
+      issueDate: payload.issueDate instanceof Date ? payload.issueDate.toISOString() : payload.issueDate,
+      dueDate: payload.dueDate instanceof Date ? payload.dueDate.toISOString() : payload.dueDate,
+      currency: payload.currency || "GBP",
+      lineItems: payload.lineItems || [],
+      subtotal: payload.subtotal || 0,
+      vatTotal: payload.vatTotal || 0,
+      total: payload.total || 0,
+      paymentInstructions: payload.paymentInstructions || "",
+      notes: payload.notes || "",
+      createdBy: payload.createdBy || null,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    database.invoices.push(invoice);
+    return invoice;
+  });
+}
+
+export async function listInvoices() {
+  const database = await readDatabase();
+  return clone(sortNewest(database.invoices));
+}
+
+export async function findInvoiceById(id) {
+  const database = await readDatabase();
+  return clone(database.invoices.find((invoice) => invoice._id === id) || null);
+}
+
+export async function updateInvoice(id, updates) {
+  return updateDatabase((database) => {
+    const invoice = database.invoices.find((item) => item._id === id);
+
+    if (!invoice) {
+      return null;
+    }
+
+    Object.assign(invoice, updates, { updatedAt: now() });
+    return invoice;
   });
 }
 

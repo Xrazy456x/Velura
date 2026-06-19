@@ -4,6 +4,7 @@ import { connectDatabase, useFileDatabase } from "../config/database.js";
 import AuditEvent from "../models/AuditEvent.js";
 import Booking from "../models/Booking.js";
 import Employee from "../models/Employee.js";
+import Invoice from "../models/Invoice.js";
 import Lead from "../models/Lead.js";
 import Message from "../models/Message.js";
 import QuoteRequest from "../models/QuoteRequest.js";
@@ -44,7 +45,8 @@ async function main() {
   const idMaps = {
     users: new Map(),
     leads: new Map(),
-    employees: new Map()
+    employees: new Map(),
+    bookings: new Map()
   };
   const counts = {
     users: 0,
@@ -53,6 +55,7 @@ async function main() {
     quoteRequests: 0,
     employees: 0,
     bookings: 0,
+    invoices: 0,
     reviews: 0,
     auditEvents: 0
   };
@@ -167,7 +170,7 @@ async function main() {
   }
 
   for (const booking of database.bookings || []) {
-    await upsertBy(
+    const saved = await upsertBy(
       Booking,
       {
         email: booking.email,
@@ -199,7 +202,40 @@ async function main() {
         updatedAt: asDate(booking.updatedAt)
       }
     );
+    idMaps.bookings.set(booking._id, saved._id);
     counts.bookings += 1;
+  }
+
+  for (const invoice of database.invoices || []) {
+    await upsertBy(
+      Invoice,
+      { invoiceNumber: invoice.invoiceNumber },
+      {
+        booking: idMaps.bookings?.get(invoice.booking) || null,
+        invoiceNumber: invoice.invoiceNumber,
+        bookingReference: invoice.bookingReference || "",
+        status: invoice.status || "draft",
+        clientName: invoice.clientName,
+        email: invoice.email,
+        phone: invoice.phone || "",
+        billingAddress: invoice.billingAddress,
+        service: invoice.service,
+        bookingDate: invoice.bookingDate ? asDate(invoice.bookingDate) : undefined,
+        issueDate: asDate(invoice.issueDate),
+        dueDate: asDate(invoice.dueDate),
+        currency: invoice.currency || "GBP",
+        lineItems: invoice.lineItems || [],
+        subtotal: invoice.subtotal || 0,
+        vatTotal: invoice.vatTotal || 0,
+        total: invoice.total || 0,
+        paymentInstructions: invoice.paymentInstructions || "",
+        notes: invoice.notes || "",
+        createdBy: idMaps.users.get(invoice.createdBy) || null,
+        createdAt: asDate(invoice.createdAt),
+        updatedAt: asDate(invoice.updatedAt)
+      }
+    );
+    counts.invoices += 1;
   }
 
   for (const review of database.reviews || []) {
