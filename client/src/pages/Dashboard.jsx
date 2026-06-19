@@ -27,7 +27,7 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { apiClient, getApiError } from "../api/client.js";
+import { apiClient, buildApiUrl, getApiError } from "../api/client.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import StatCard from "../components/StatCard.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
@@ -684,16 +684,14 @@ export default function Dashboard() {
     setInvoiceAction(`pdf:${invoice._id}`);
 
     try {
-      const { data } = await apiClient.get(`/invoices/${invoice._id}/pdf`, { responseType: "blob" });
-      const blob = new Blob([data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
+      const { data } = await apiClient.post(`/invoices/${invoice._id}/download-ticket`);
+      const url = buildApiUrl(`/invoices/${invoice._id}/pdf/direct?ticket=${encodeURIComponent(data.token)}`);
       const link = document.createElement("a");
       link.href = url;
       link.download = `${invoice.invoiceNumber || "velura-invoice"}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.URL.revokeObjectURL(url);
     } catch (requestError) {
       setError(getApiError(requestError, "Invoice PDF could not be downloaded."));
     } finally {

@@ -335,7 +335,15 @@ Updates invoice status.
 
 `GET /invoices/:id/pdf`
 
-Downloads the generated invoice PDF. Managers can upload or match this PDF in Tide.
+Downloads the generated invoice PDF when called with the manager Authorization header.
+
+`POST /invoices/:id/download-ticket`
+
+Creates a short-lived invoice PDF download ticket for the website download button.
+
+`GET /invoices/:id/pdf/direct?ticket=<ticket>`
+
+Downloads the generated invoice PDF through a normal browser link. The ticket expires quickly. Managers can upload or match this PDF in Tide.
 
 ## Employees
 

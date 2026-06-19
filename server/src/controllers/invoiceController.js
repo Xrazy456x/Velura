@@ -1,8 +1,11 @@
+import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { useFileDatabase } from "../config/database.js";
+import { env } from "../config/env.js";
 import Booking from "../models/Booking.js";
 import Counter from "../models/Counter.js";
 import Invoice from "../models/Invoice.js";
+import User from "../models/User.js";
 import { recordAuditEvent } from "../services/auditService.js";
 import * as fileStore from "../services/fileStore.js";
 import { generateInvoicePdf } from "../services/invoicePdfService.js";
@@ -42,6 +45,15 @@ export const createInvoiceSchema = z.object({
 export const invoiceIdSchema = z.object({
   params: z.object({
     id: z.string().min(1)
+  })
+});
+
+export const invoicePdfTicketSchema = z.object({
+  params: z.object({
+    id: z.string().min(1)
+  }),
+  query: z.object({
+    ticket: z.string().min(1)
   })
 });
 
@@ -173,6 +185,16 @@ async function findInvoice(id) {
   return Invoice.findById(id).populate("booking", "bookingNumber clientName service scheduledFor address").populate("createdBy", "name email").lean();
 }
 
+async function findActiveAdmin(id) {
+  const user = useFileDatabase() ? await fileStore.findUserById(id) : await User.findById(id).lean();
+
+  if (!user || user.status !== "active" || user.role !== "admin") {
+    return null;
+  }
+
+  return user;
+}
+
 async function listInvoiceRecords() {
   if (useFileDatabase()) {
     return fileStore.listInvoices();
@@ -239,8 +261,7 @@ export const updateInvoiceStatus = asyncHandler(async (req, res) => {
   return res.json({ invoice });
 });
 
-export const downloadInvoicePdf = asyncHandler(async (req, res) => {
-  const { id } = req.validated.params;
+async function sendInvoicePdf(res, id) {
   const invoice = await findInvoice(id);
 
   if (!invoice) {
@@ -253,4 +274,54 @@ export const downloadInvoicePdf = asyncHandler(async (req, res) => {
   res.setHeader("Content-Disposition", `attachment; filename="${invoice.invoiceNumber}.pdf"`);
   res.setHeader("Content-Length", pdf.length);
   return res.send(pdf);
+}
+
+export const createInvoiceDownloadTicket = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const invoice = await findInvoice(id);
+
+  if (!invoice) {
+    return res.status(404).json({ message: "Invoice not found." });
+  }
+
+  const token = jwt.sign(
+    {
+      type: "invoice_pdf",
+      invoiceId: id,
+      sub: req.user._id.toString(),
+      role: req.user.role
+    },
+    env.jwtSecret,
+    { expiresIn: "2m" }
+  );
+
+  return res.json({ token, expiresInSeconds: 120 });
+});
+
+export const downloadInvoicePdfWithTicket = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const { ticket } = req.validated.query;
+
+  try {
+    const payload = jwt.verify(ticket, env.jwtSecret);
+
+    if (payload.type !== "invoice_pdf" || payload.invoiceId !== id) {
+      return res.status(403).json({ message: "Invoice download link is not valid for this invoice." });
+    }
+
+    const user = await findActiveAdmin(payload.sub);
+
+    if (!user) {
+      return res.status(403).json({ message: "Invoice download access is no longer available." });
+    }
+
+    return sendInvoicePdf(res, id);
+  } catch {
+    return res.status(401).json({ message: "Invoice download link has expired. Please download it again from the dashboard." });
+  }
+});
+
+export const downloadInvoicePdf = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  return sendInvoicePdf(res, id);
 });

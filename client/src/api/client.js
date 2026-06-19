@@ -23,3 +23,10 @@ apiClient.interceptors.request.use((config) => {
 export function getApiError(error, fallback = "Something went wrong. Please try again.") {
   return error?.response?.data?.message || error?.message || fallback;
 }
+
+export function buildApiUrl(path) {
+  const normalizedBase = baseURL.replace(/\/$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  return `${normalizedBase}${normalizedPath}`;
+}
