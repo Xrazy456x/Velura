@@ -26,6 +26,19 @@ function formatMoney(value, currency = "GBP") {
   return `${currency} ${(Number(value) || 0).toFixed(2)}`;
 }
 
+function calculateTotals(invoice) {
+  const lineItems = invoice.lineItems || [];
+  const subtotal = lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const vatTotal = lineItems.reduce((sum, item) => sum + (Number(item.vatAmount) || 0), 0);
+  const total = lineItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+
+  return {
+    subtotal: subtotal || Number(invoice.subtotal) || 0,
+    vatTotal: vatTotal || Number(invoice.vatTotal) || 0,
+    total: total || Number(invoice.total) || 0
+  };
+}
+
 function wrapText(value, maxChars = 56) {
   const words = String(value || "").split(/\s+/).filter(Boolean);
   const lines = [];
@@ -109,6 +122,7 @@ function multiline(commands, value, x, y, options = {}) {
 export function generateInvoicePdf(invoice) {
   const commands = [];
   const currency = invoice.currency || "GBP";
+  const totals = calculateTotals(invoice);
   let y = 790;
 
   rect(commands, 0, 760, 595.28, 81.89, "0.09 0.07 0.06");
@@ -143,9 +157,9 @@ export function generateInvoicePdf(invoice) {
   rect(commands, 48, y, 499, 26, "0.96 0.92 0.85");
   text(commands, "Description", 60, y + 8, 9, "F2", "0.36 0.25 0.17");
   text(commands, "Qty", 318, y + 8, 9, "F2", "0.36 0.25 0.17");
-  text(commands, "Unit", 358, y + 8, 9, "F2", "0.36 0.25 0.17");
-  text(commands, "VAT", 430, y + 8, 9, "F2", "0.36 0.25 0.17");
-  text(commands, "Total", 488, y + 8, 9, "F2", "0.36 0.25 0.17");
+  text(commands, "Unit ex VAT", 350, y + 8, 8, "F2", "0.36 0.25 0.17");
+  text(commands, "VAT %", 430, y + 8, 8, "F2", "0.36 0.25 0.17");
+  text(commands, "Total due", 488, y + 8, 8, "F2", "0.36 0.25 0.17");
   y -= 24;
 
   for (const item of invoice.lineItems || []) {
@@ -165,13 +179,14 @@ export function generateInvoicePdf(invoice) {
 
   y = Math.min(y - 12, 390);
   const totalsX = 365;
-  text(commands, "Subtotal", totalsX, y, 10, "F2", "0.31 0.27 0.25");
-  text(commands, formatMoney(invoice.subtotal, currency), 488, y, 10, "F1");
-  text(commands, "VAT", totalsX, y - 20, 10, "F2", "0.31 0.27 0.25");
-  text(commands, formatMoney(invoice.vatTotal, currency), 488, y - 20, 10, "F1");
-  rect(commands, totalsX - 12, y - 58, 182, 29, "0.09 0.07 0.06");
+  const totalsAmountX = 462;
+  text(commands, "Subtotal ex VAT", totalsX, y, 10, "F2", "0.31 0.27 0.25");
+  text(commands, formatMoney(totals.subtotal, currency), totalsAmountX, y, 10, "F1");
+  text(commands, "VAT total", totalsX, y - 20, 10, "F2", "0.31 0.27 0.25");
+  text(commands, formatMoney(totals.vatTotal, currency), totalsAmountX, y - 20, 10, "F1");
+  rect(commands, totalsX - 12, y - 58, 194, 29, "0.09 0.07 0.06");
   text(commands, "Total due", totalsX, y - 48, 11, "F2", "1 1 1");
-  text(commands, formatMoney(invoice.total, currency), 488, y - 48, 11, "F2", "1 1 1");
+  text(commands, formatMoney(totals.total, currency), totalsAmountX, y - 48, 11, "F2", "1 1 1");
 
   y = 185;
   text(commands, "Payment", 48, y, 11, "F2", "0.56 0.42 0.32");
