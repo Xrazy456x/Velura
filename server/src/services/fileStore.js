@@ -324,9 +324,9 @@ export async function nextBookingNumber(year) {
 
       const numericPart = Number(current.replace(prefix, ""));
       return Number.isFinite(numericPart) ? Math.max(max, numericPart) : max;
-    }, 0);
+    }, 99);
 
-    return `${prefix}${String(latest + 1).padStart(4, "0")}`;
+    return `${prefix}${String(latest + 1).padStart(3, "0")}`;
   });
 }
 

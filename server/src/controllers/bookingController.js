@@ -17,10 +17,16 @@ import * as fileStore from "../services/fileStore.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const bookingStatuses = ["scheduled", "confirmed", "completed", "cancelled"];
+const firstBookingSequence = 100;
+const bookingSequenceFloor = firstBookingSequence - 1;
 
 function bookingNumberYear(value = new Date()) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? new Date().getFullYear() : date.getFullYear();
+}
+
+function formatBookingNumber(year, sequence) {
+  return `VEL-${year}-${String(sequence).padStart(3, "0")}`;
 }
 
 async function maxExistingBookingSequence(year) {
@@ -32,7 +38,7 @@ async function maxExistingBookingSequence(year) {
   return existingBookings.reduce((max, booking) => {
     const numericPart = Number(String(booking.bookingNumber || "").replace(prefix, ""));
     return Number.isFinite(numericPart) ? Math.max(max, numericPart) : max;
-  }, 0);
+  }, bookingSequenceFloor);
 }
 
 async function createBookingNumber(scheduledFor) {
@@ -56,7 +62,7 @@ async function createBookingNumber(scheduledFor) {
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  return `VEL-${year}-${String(counter.seq).padStart(4, "0")}`;
+  return formatBookingNumber(year, counter.seq);
 }
 
 function isDuplicateBookingNumberError(error) {
