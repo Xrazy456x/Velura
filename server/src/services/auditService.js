@@ -4,27 +4,54 @@ import AuditEvent from "../models/AuditEvent.js";
 import * as fileStore from "./fileStore.js";
 
 const REDACTED = "[redacted]";
+const CIRCULAR = "[circular]";
 const sensitiveKeys = new Set(["password", "passwordHash", "token", "jwt", "authorization"]);
 
 function expiresAt() {
   return new Date(Date.now() + env.auditLogRetentionDays * 24 * 60 * 60 * 1000);
 }
 
-function sanitize(value) {
+function sanitize(value, seen = new WeakSet()) {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  if (typeof value.toHexString === "function") {
+    return value.toString();
+  }
+
+  if (seen.has(value)) {
+    return CIRCULAR;
+  }
+
+  seen.add(value);
+
   if (Array.isArray(value)) {
-    return value.map(sanitize);
+    return value.map((item) => sanitize(item, seen));
   }
 
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, nestedValue]) => [
-        key,
-        sensitiveKeys.has(key.toLowerCase()) ? REDACTED : sanitize(nestedValue)
-      ])
-    );
+  if (value instanceof Map) {
+    return sanitize(Object.fromEntries(value), seen);
   }
 
-  return value;
+  if (typeof value.toObject === "function") {
+    return sanitize(value.toObject({ depopulate: false, getters: false, versionKey: false, virtuals: false }), seen);
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nestedValue]) => [
+      key,
+      sensitiveKeys.has(key.toLowerCase()) ? REDACTED : sanitize(nestedValue, seen)
+    ])
+  );
 }
 
 function actorFromRequest(req) {
@@ -41,19 +68,19 @@ function actorFromRequest(req) {
 }
 
 export async function recordAuditEvent(req, event) {
-  const payload = {
-    action: event.action,
-    resource: event.resource,
-    resourceId: event.resourceId?.toString?.() || event.resourceId,
-    summary: event.summary,
-    actor: event.actor || actorFromRequest(req),
-    metadata: sanitize(event.metadata || {}),
-    ipAddress: req.ip,
-    userAgent: req.get("user-agent"),
-    expiresAt: expiresAt()
-  };
-
   try {
+    const payload = {
+      action: event.action,
+      resource: event.resource,
+      resourceId: event.resourceId?.toString?.() || event.resourceId,
+      summary: event.summary,
+      actor: event.actor || actorFromRequest(req),
+      metadata: sanitize(event.metadata || {}),
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+      expiresAt: expiresAt()
+    };
+
     if (useFileDatabase()) {
       return fileStore.createAuditEvent(payload);
     }
