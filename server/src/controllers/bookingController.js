@@ -23,6 +23,18 @@ function bookingNumberYear(value = new Date()) {
   return Number.isNaN(date.getTime()) ? new Date().getFullYear() : date.getFullYear();
 }
 
+async function maxExistingBookingSequence(year) {
+  const prefix = `VEL-${year}-`;
+  const existingBookings = await Booking.find({ bookingNumber: { $regex: `^${prefix}\\d+$` } })
+    .select("bookingNumber")
+    .lean();
+
+  return existingBookings.reduce((max, booking) => {
+    const numericPart = Number(String(booking.bookingNumber || "").replace(prefix, ""));
+    return Number.isFinite(numericPart) ? Math.max(max, numericPart) : max;
+  }, 0);
+}
+
 async function createBookingNumber(scheduledFor) {
   const year = bookingNumberYear(scheduledFor);
 
@@ -30,13 +42,25 @@ async function createBookingNumber(scheduledFor) {
     return fileStore.nextBookingNumber(year);
   }
 
+  const key = `bookings:${year}`;
+  const maxExisting = await maxExistingBookingSequence(year);
+  await Counter.findOneAndUpdate(
+    { key },
+    { $max: { seq: maxExisting } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+
   const counter = await Counter.findOneAndUpdate(
-    { key: `bookings:${year}` },
+    { key },
     { $inc: { seq: 1 } },
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
   return `VEL-${year}-${String(counter.seq).padStart(4, "0")}`;
+}
+
+function isDuplicateBookingNumberError(error) {
+  return Boolean(error?.code === 11000 && (error?.keyPattern?.bookingNumber || error?.keyValue?.bookingNumber));
 }
 
 const bookingBodySchema = z.object({
@@ -270,16 +294,29 @@ export const createBooking = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "One or more assigned cleaners could not be found." });
   }
 
-  const bookingPayload = normalizeBookingPayload(
-    {
-      ...payload,
-      bookingNumber: await createBookingNumber(payload.scheduledFor)
-    },
-    req,
-    lead,
-    employees
-  );
-  let booking = useFileDatabase() ? await fileStore.createBooking(bookingPayload) : await Booking.create(bookingPayload);
+  let booking = null;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const bookingPayload = normalizeBookingPayload(
+      {
+        ...payload,
+        bookingNumber: await createBookingNumber(payload.scheduledFor)
+      },
+      req,
+      lead,
+      employees
+    );
+
+    try {
+      booking = useFileDatabase() ? await fileStore.createBooking(bookingPayload) : await Booking.create(bookingPayload);
+      break;
+    } catch (error) {
+      if (!isDuplicateBookingNumberError(error) || attempt === 4) {
+        throw error;
+      }
+    }
+  }
+
   let clientCommunication = { sent: false, reason: "Client confirmation not requested" };
 
   if (payload.sendConfirmation && payload.communicationPreference === "email") {
