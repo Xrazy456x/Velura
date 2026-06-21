@@ -500,13 +500,15 @@ export default function Dashboard() {
 
     const previous = bookings;
     const previousDeleted = deletedBookings;
-    setBookings((current) => current.filter((booking) => booking._id !== bookingId));
     setError("");
 
     try {
       const { data } = await apiClient.delete(`/bookings/${bookingId}`);
-      setDeletedBookings((current) => [data.booking, ...current.filter((booking) => booking._id !== bookingId)]);
-      await loadAuditEvents();
+      const deletedBooking = data.booking;
+
+      setBookings((current) => current.filter((booking) => booking._id !== bookingId));
+      setDeletedBookings((current) => [deletedBooking, ...current.filter((booking) => booking._id !== bookingId)]);
+      await Promise.allSettled([loadBookingRecords(), loadAuditEvents()]);
     } catch (requestError) {
       setBookings(previous);
       setDeletedBookings(previousDeleted);

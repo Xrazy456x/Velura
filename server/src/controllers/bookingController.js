@@ -339,7 +339,7 @@ export const deleteBooking = asyncHandler(async (req, res) => {
     ? await fileStore.softDeleteBooking(id, req.user?._id || null)
     : await Booking.findOneAndUpdate(
         { _id: id, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] },
-        { deletedAt: new Date(), deletedBy: req.user?._id || null },
+        { $set: { deletedAt: new Date(), deletedBy: req.user?._id || null } },
         { new: true, runValidators: true }
       )
         .populate("lead", "status service name email phone company message")
@@ -368,7 +368,7 @@ export const restoreBooking = asyncHandler(async (req, res) => {
     ? await fileStore.restoreBooking(id)
     : await Booking.findOneAndUpdate(
         { _id: id, deletedAt: { $exists: true, $ne: null } },
-        { deletedAt: null, deletedBy: null },
+        { $set: { deletedAt: null, deletedBy: null } },
         { new: true, runValidators: true }
       )
         .populate("lead", "status service name email phone company message")
