@@ -42,8 +42,8 @@ async function createBookingNumber(scheduledFor) {
 const bookingBodySchema = z.object({
   leadId: z.string().trim().optional().or(z.literal("")),
   clientName: z.string().trim().min(2, "Client name must be at least 2 characters.").max(100),
-  email: z.string().trim().email("Please provide a valid email.").toLowerCase(),
-  phone: z.string().trim().min(5, "Phone number is required for booking confirmation.").max(40),
+  email: z.string().trim().email("Please provide a valid email.").toLowerCase().optional().or(z.literal("")),
+  phone: z.string().trim().max(40).optional().or(z.literal("")),
   service: z.string().trim().min(2, "Service is required.").max(120),
   address: z.string().trim().min(5, "Address is required.").max(300),
   scheduledFor: z.string().trim().min(1, "Booking date and time is required.").refine(
@@ -190,8 +190,8 @@ function normalizeBookingPayload(payload, req, lead, employees = []) {
     lead: lead?._id || null,
     bookingNumber: payload.bookingNumber,
     clientName: payload.clientName,
-    email: payload.email,
-    phone: payload.phone,
+    email: payload.email || "",
+    phone: payload.phone || "",
     service: payload.service,
     address: payload.address,
     scheduledFor: new Date(payload.scheduledFor),
@@ -220,8 +220,8 @@ function normalizeBookingUpdates(payload, lead, employees = []) {
   return {
     lead: lead?._id || null,
     clientName: payload.clientName,
-    email: payload.email,
-    phone: payload.phone,
+    email: payload.email || "",
+    phone: payload.phone || "",
     service: payload.service,
     address: payload.address,
     scheduledFor: new Date(payload.scheduledFor),

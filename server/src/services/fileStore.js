@@ -338,7 +338,7 @@ export async function createBooking(payload) {
       lead: payload.lead || null,
       bookingNumber: payload.bookingNumber || "",
       clientName: payload.clientName,
-      email: payload.email.toLowerCase(),
+      email: (payload.email || "").toLowerCase(),
       phone: payload.phone || "",
       service: payload.service,
       address: payload.address,

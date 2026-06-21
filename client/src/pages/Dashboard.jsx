@@ -2276,11 +2276,18 @@ function BookingForm({ editingBookingId, employees, leads, form, status, onCance
         </label>
         <label className="grid gap-2 text-sm font-bold text-coal">
           Email
-          <input className="input-field" type="email" name="email" value={form.email} onChange={onChange} required />
+          <input
+            className="input-field"
+            type="email"
+            name="email"
+            value={form.email}
+            onChange={onChange}
+            placeholder="Optional for manual bookings"
+          />
         </label>
         <label className="grid gap-2 text-sm font-bold text-coal">
           Phone
-          <input className="input-field" name="phone" value={form.phone} onChange={onChange} required />
+          <input className="input-field" name="phone" value={form.phone} onChange={onChange} placeholder="Optional" />
         </label>
         <label className="grid gap-2 text-sm font-bold text-coal">
           Service
@@ -2402,6 +2409,11 @@ function BookingForm({ editingBookingId, employees, leads, form, status, onCance
           </label>
           {editingBookingId && (
             <p className="text-sm font-semibold text-stone-500">Use the booking card buttons to send email or record phone confirmation.</p>
+          )}
+          {!editingBookingId && (
+            <p className="text-sm font-semibold text-stone-500">
+              Email and phone are optional for manual bookings. Confirmations are skipped when contact details are missing.
+            </p>
           )}
           {status === "success" && (
             <p className="text-sm font-bold text-lime-700">

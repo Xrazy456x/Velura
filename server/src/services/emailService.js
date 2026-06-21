@@ -204,15 +204,19 @@ async function sendResendEmail({ to, replyTo, subject, text, html }) {
 
 async function sendSmtpEmail({ to, replyTo, subject, text, html }) {
   const transporter = createTransporter();
-
-  await transporter.sendMail({
+  const message = {
     from: env.smtp.from,
     to: normalizeRecipients(to),
-    replyTo,
     subject,
     text,
     html
-  });
+  };
+
+  if (replyTo) {
+    message.replyTo = replyTo;
+  }
+
+  await transporter.sendMail(message);
 
   return { sent: true, provider: "smtp" };
 }
@@ -370,6 +374,10 @@ export async function sendBookingSmsStatusUpdate(booking, previousStatus) {
 }
 
 export async function sendBookingConfirmation(booking) {
+  if (!booking.email) {
+    return { sent: false, status: "skipped", reason: "Client email address is missing." };
+  }
+
   if (!isEmailConfigured()) {
     console.info("Email provider is not configured. Skipping booking confirmation email.");
     return { sent: false, reason: "Email provider not configured" };
@@ -417,6 +425,10 @@ export async function sendBookingConfirmation(booking) {
 }
 
 export async function sendBookingStatusUpdate(booking, previousStatus) {
+  if (!booking.email) {
+    return { sent: false, status: "skipped", reason: "Client email address is missing." };
+  }
+
   if (!isEmailConfigured()) {
     console.info("Email provider is not configured. Skipping booking status email.");
     return { sent: false, reason: "Email provider not configured" };
