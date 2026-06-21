@@ -258,6 +258,22 @@ function bookingReference(booking) {
   return fallback ? `VEL-${fallback}` : "VEL-BOOKING";
 }
 
+function bookingAssignedCleaners(booking, employees = []) {
+  return (booking?.assignedEmployees || [])
+    .map((employee) => {
+      if (employee && typeof employee === "object") {
+        return employee;
+      }
+
+      return employees.find((item) => item._id === employee) || { _id: employee, name: employee };
+    })
+    .filter(Boolean);
+}
+
+function bookingCleanerEmails(booking, employees = []) {
+  return bookingAssignedCleaners(booking, employees).filter((employee) => employee?.email);
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("leads");
@@ -597,6 +613,21 @@ export default function Dashboard() {
       await loadAuditEvents();
     } catch (requestError) {
       setError(getApiError(requestError, "Email confirmation could not be sent."));
+    } finally {
+      setBookingAction("idle");
+    }
+  }
+
+  async function sendBookingCleanerBrief(bookingId) {
+    setError("");
+    setBookingAction(`cleaners:${bookingId}`);
+
+    try {
+      const { data } = await apiClient.post(`/bookings/${bookingId}/cleaner-brief`);
+      setBookings((current) => current.map((booking) => (booking._id === bookingId ? data.booking : booking)));
+      await Promise.allSettled([loadBookingRecords(), loadAuditEvents()]);
+    } catch (requestError) {
+      setError(getApiError(requestError, "Cleaner job brief could not be sent."));
     } finally {
       setBookingAction("idle");
     }
@@ -1038,6 +1069,7 @@ export default function Dashboard() {
               onDelete={deleteBooking}
               onDatePick={selectBookingDate}
               onEdit={startEditingBooking}
+              onCleanerBrief={sendBookingCleanerBrief}
               onEmailConfirmation={sendBookingEmailConfirmation}
               onPhoneConfirmation={markBookingPhoneConfirmed}
               onRestore={restoreBooking}
@@ -1753,6 +1785,7 @@ function BookingPanel({
   onDelete,
   onDatePick,
   onEdit,
+  onCleanerBrief,
   onEmailConfirmation,
   onPhoneConfirmation,
   onRestore,
@@ -1859,6 +1892,7 @@ function BookingPanel({
           title={normalizedSearch ? "Search results" : ""}
           onDelete={onDelete}
           onEdit={onEdit}
+          onCleanerBrief={onCleanerBrief}
           onEmailConfirmation={onEmailConfirmation}
           onPhoneConfirmation={onPhoneConfirmation}
           onStatusChange={onStatusChange}
@@ -1993,6 +2027,7 @@ function SelectedDaySchedule({
   title = "",
   onDelete,
   onEdit,
+  onCleanerBrief,
   onEmailConfirmation,
   onPhoneConfirmation,
   onStatusChange
@@ -2008,6 +2043,8 @@ function SelectedDaySchedule({
             booking.communicationLog && booking.communicationLog.length > 0
               ? booking.communicationLog[booking.communicationLog.length - 1]
               : null;
+          const assignedCleaners = bookingAssignedCleaners(booking, employees);
+          const cleanerEmailCount = bookingCleanerEmails(booking, employees).length;
 
           return (
             <article className="rounded-lg border border-stone-200 bg-white p-4" key={booking._id}>
@@ -2048,16 +2085,9 @@ function SelectedDaySchedule({
                   {booking.communicationPreference || "email"}:{" "}
                   {latestLog ? `${latestLog.status} - ${latestLog.detail}` : "No update sent yet"}
                 </p>
-                {booking.assignedEmployees?.length > 0 && (
+                {assignedCleaners.length > 0 && (
                   <p className="font-semibold text-stone-500">
-                    Cleaners:{" "}
-                    {booking.assignedEmployees
-                      .map((employee) =>
-                        typeof employee === "object"
-                          ? employee.name
-                          : employees.find((item) => item._id === employee)?.name || employee
-                      )
-                      .join(", ")}
+                    Cleaners: {assignedCleaners.map((employee) => employee.name || employee.email || employee._id).join(", ")}
                   </p>
                 )}
                 {booking.accessInstructions && <p className="font-semibold text-stone-500">Access: {booking.accessInstructions}</p>}
@@ -2080,6 +2110,20 @@ function SelectedDaySchedule({
                     <Send size={16} aria-hidden="true" />
                   )}
                   Email confirmation
+                </button>
+                <button
+                  className="button-secondary px-3 py-2"
+                  type="button"
+                  onClick={() => onCleanerBrief(booking._id)}
+                  disabled={cleanerEmailCount === 0 || actionStatus === `cleaners:${booking._id}`}
+                  title={cleanerEmailCount === 0 ? "Assign cleaners with email addresses before sending a job brief." : "Email assigned cleaners"}
+                >
+                  {actionStatus === `cleaners:${booking._id}` ? (
+                    <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+                  ) : (
+                    <Mail size={16} aria-hidden="true" />
+                  )}
+                  Email cleaners
                 </button>
                 <button
                   className="button-secondary px-3 py-2"

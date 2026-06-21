@@ -88,6 +88,14 @@ function humanStatus(value = "") {
   return String(value).replace(/_/g, " ");
 }
 
+function employeeName(employee) {
+  return employee?.name || employee?.email || "Assigned cleaner";
+}
+
+function assignedEmployees(booking) {
+  return Array.isArray(booking?.assignedEmployees) ? booking.assignedEmployees.filter(Boolean) : [];
+}
+
 function buildDetailRows(rows = []) {
   const visibleRows = rows.filter((row) => {
     const value = row?.value;
@@ -502,4 +510,71 @@ export async function sendBookingTeamNotification(booking, eventLabel = "created
       replyNote: `Replying to this email will reply to ${booking.email}.`
     })
   });
+}
+
+export async function sendBookingCleanerBrief(booking) {
+  const cleaners = assignedEmployees(booking);
+  const cleanersWithEmail = cleaners.filter((employee) => employee?.email);
+
+  if (!cleaners.length) {
+    return { sent: false, status: "skipped", reason: "No cleaners are assigned to this booking." };
+  }
+
+  if (!cleanersWithEmail.length) {
+    return { sent: false, status: "skipped", reason: "Assigned cleaners do not have email addresses." };
+  }
+
+  if (!isEmailConfigured()) {
+    console.info("Email provider is not configured. Skipping cleaner job brief email.");
+    return { sent: false, status: "skipped", reason: "Email provider not configured" };
+  }
+
+  const reference = bookingReference(booking);
+  const teamNames = cleaners.map(employeeName).join(", ");
+  const recipientEmails = cleanersWithEmail.map((employee) => employee.email);
+  const lines = [
+    `You have been assigned to a Velura Services cleaning job: ${reference}.`,
+    "Please review the details before attending. If anything looks wrong or you need support, reply to this email and a manager will pick it up.",
+    "Please contact the Velura manager before contacting the client directly unless you have been asked to do so."
+  ];
+  const detailRows = [
+    { label: "Job reference", value: reference },
+    { label: "Service", value: booking.service },
+    { label: "Date and time", value: formatBookingDate(booking.scheduledFor) },
+    { label: "Estimated duration", value: formatDuration(booking.durationMinutes) },
+    { label: "Client name", value: booking.clientName },
+    { label: "Address", value: booking.address },
+    { label: "Access instructions", value: booking.accessInstructions },
+    { label: "Parking notes", value: booking.parkingNotes },
+    { label: "Job notes", value: booking.notes },
+    { label: "Assigned team", value: teamNames },
+    { label: "Manager contact", value: env.smtp.contactTo }
+  ];
+  const textLines = [
+    ...lines,
+    "",
+    ...detailRows.filter((row) => row.value).map((row) => `${row.label}: ${row.value}`),
+    "",
+    "Velura Services",
+    "Luxury cleaning, gently delivered"
+  ];
+  const result = await sendEmail({
+    to: recipientEmails,
+    replyTo: env.smtp.contactTo,
+    subject: `[${reference}] Velura Services job brief - ${booking.service}`,
+    text: textLines.join("\n"),
+    html: buildEmailHtml("Your Velura job brief", lines, {
+      eyebrow: "Cleaner job brief",
+      referenceLabel: "Job reference",
+      referenceValue: reference,
+      detailRows,
+      replyNote: `Reply to this email if you need help. Replies go to ${env.smtp.contactTo}.`
+    })
+  });
+
+  return {
+    ...result,
+    detail: `Job brief sent to ${cleanersWithEmail.length} cleaner${cleanersWithEmail.length === 1 ? "" : "s"}.`,
+    recipients: recipientEmails
+  };
 }

@@ -9,6 +9,7 @@ import {
   markBookingPhoneConfirmed,
   markPhoneConfirmationSchema,
   restoreBooking,
+  sendBookingCleanerBriefEmail,
   sendBookingEmailConfirmation,
   updateBooking,
   updateBookingSchema,
@@ -28,6 +29,7 @@ router.patch("/:id", validate(updateBookingSchema), updateBooking);
 router.delete("/:id", validate(bookingIdSchema), deleteBooking);
 router.post("/:id/restore", validate(bookingIdSchema), restoreBooking);
 router.post("/:id/email-confirmation", validate(bookingIdSchema), sendBookingEmailConfirmation);
+router.post("/:id/cleaner-brief", validate(bookingIdSchema), sendBookingCleanerBriefEmail);
 router.post("/:id/phone-confirmation", validate(markPhoneConfirmationSchema), markBookingPhoneConfirmed);
 router.patch("/:id/status", validate(updateBookingStatusSchema), updateBookingStatus);
 

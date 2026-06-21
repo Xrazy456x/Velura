@@ -7,6 +7,7 @@ import Lead from "../models/Lead.js";
 import { recordAuditEvent } from "../services/auditService.js";
 import {
   sendBookingConfirmation,
+  sendBookingCleanerBrief,
   sendBookingSmsConfirmation,
   sendBookingSmsStatusUpdate,
   sendBookingStatusUpdate,
@@ -99,7 +100,7 @@ function buildCommunicationLog(channel, type, result) {
     channel,
     type,
     status: result?.status || (result?.sent ? "sent" : "skipped"),
-    detail: result?.sent ? "Message sent successfully." : result?.reason || "Message was not sent.",
+    detail: result?.detail || (result?.sent ? "Message sent successfully." : result?.reason || "Message was not sent."),
     sentAt: new Date()
   };
 }
@@ -145,6 +146,28 @@ async function findEmployees(employeeIds = []) {
 
 async function findBooking(id) {
   return useFileDatabase() ? fileStore.findBookingById(id) : Booking.findById(id).lean();
+}
+
+async function findBookingWithAssignedEmployees(id) {
+  if (useFileDatabase()) {
+    const booking = await fileStore.findBookingById(id);
+
+    if (!booking) {
+      return null;
+    }
+
+    const employees = await findEmployees(booking.assignedEmployees || []);
+    return {
+      ...booking,
+      assignedEmployees: employees
+    };
+  }
+
+  return Booking.findById(id)
+    .populate("lead", "status service name email phone company message")
+    .populate("assignedEmployees", "name email phone role status")
+    .populate("createdBy", "name email")
+    .lean();
 }
 
 function isDeletedBooking(booking) {
@@ -484,6 +507,38 @@ export const sendBookingEmailConfirmation = asyncHandler(async (req, res) => {
   });
 
   return res.json({ booking, clientCommunication });
+});
+
+export const sendBookingCleanerBriefEmail = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  let booking = await findBookingWithAssignedEmployees(id);
+
+  if (!booking || isDeletedBooking(booking)) {
+    return res.status(404).json({ message: "Booking not found." });
+  }
+
+  if (!booking.assignedEmployees?.length) {
+    return res.status(400).json({ message: "Assign at least one cleaner before sending a cleaner job brief." });
+  }
+
+  if (!booking.assignedEmployees.some((employee) => employee?.email)) {
+    return res.status(400).json({ message: "Assigned cleaners need email addresses before a job brief can be sent." });
+  }
+
+  const cleanerCommunication = await attemptClientCommunication(() => sendBookingCleanerBrief(booking));
+  booking = await persistCommunicationLog(booking, buildCommunicationLog("internal", "cleaner_job_brief", cleanerCommunication));
+
+  await recordAuditEvent(req, {
+    action: "booking.cleaner_brief_sent",
+    resource: "booking",
+    resourceId: booking._id,
+    summary: `Cleaner job brief requested for ${booking.clientName}.`,
+    metadata: {
+      cleanerCommunication
+    }
+  });
+
+  return res.json({ booking, cleanerCommunication });
 });
 
 export const markBookingPhoneConfirmed = asyncHandler(async (req, res) => {
