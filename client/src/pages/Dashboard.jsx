@@ -295,9 +295,10 @@ export default function Dashboard() {
   const isAdmin = user?.role === "admin";
 
   async function loadBookingRecords() {
+    const cacheBuster = Date.now();
     const [bookingsResponse, deletedBookingsResponse] = await Promise.all([
-      apiClient.get("/bookings"),
-      apiClient.get("/bookings/deleted")
+      apiClient.get("/bookings", { params: { _: cacheBuster } }),
+      apiClient.get("/bookings/deleted", { params: { _: cacheBuster } })
     ]);
 
     setBookings(bookingsResponse.data.bookings || []);
@@ -500,26 +501,51 @@ export default function Dashboard() {
 
     const previous = bookings;
     const previousDeleted = deletedBookings;
+    const bookingToDelete = bookings.find((booking) => booking._id === bookingId);
     setError("");
+    setBookingAction(`delete:${bookingId}`);
+    setBookings((current) => current.filter((booking) => booking._id !== bookingId));
 
     try {
       const { data } = await apiClient.delete(`/bookings/${bookingId}`);
-      const deletedBooking = data.booking;
+      const deletedBooking = data.booking || {
+        ...bookingToDelete,
+        deletedAt: new Date().toISOString()
+      };
 
-      setBookings((current) => current.filter((booking) => booking._id !== bookingId));
       setDeletedBookings((current) => [deletedBooking, ...current.filter((booking) => booking._id !== bookingId)]);
       await Promise.allSettled([loadBookingRecords(), loadAuditEvents()]);
     } catch (requestError) {
       setBookings(previous);
       setDeletedBookings(previousDeleted);
       setError(getApiError(requestError, "Booking could not be deleted."));
+    } finally {
+      setBookingAction("idle");
     }
   }
 
   async function restoreBooking(bookingId) {
     const previous = bookings;
     const previousDeleted = deletedBookings;
+    const bookingToRestore = deletedBookings.find((booking) => booking._id === bookingId);
     setError("");
+    setBookingAction(`restore:${bookingId}`);
+
+    if (bookingToRestore) {
+      const optimisticBooking = {
+        ...bookingToRestore,
+        deletedAt: null,
+        deletedBy: null
+      };
+
+      setBookingFocusDate(optimisticBooking.scheduledFor);
+      setBookings((current) =>
+        [...current.filter((booking) => booking._id !== bookingId), optimisticBooking].sort(
+          (a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime()
+        )
+      );
+      setDeletedBookings((current) => current.filter((booking) => booking._id !== bookingId));
+    }
 
     try {
       const { data } = await apiClient.post(`/bookings/${bookingId}/restore`);
@@ -537,6 +563,8 @@ export default function Dashboard() {
       setBookings(previous);
       setDeletedBookings(previousDeleted);
       setError(getApiError(requestError, "Booking could not be restored."));
+    } finally {
+      setBookingAction("idle");
     }
   }
 
@@ -1846,7 +1874,7 @@ function BookingPanel({
         onChange={onChange}
         onSubmit={onSubmit}
       />
-      <RecentlyDeletedBookings bookings={deletedBookings} onRestore={onRestore} />
+      <RecentlyDeletedBookings actionStatus={actionStatus} bookings={deletedBookings} onRestore={onRestore} />
     </div>
   );
 }
@@ -2066,8 +2094,17 @@ function SelectedDaySchedule({
                   )}
                   Phone confirmed
                 </button>
-                <button className="button-secondary px-3 py-2 text-rose-700" type="button" onClick={() => onDelete(booking._id)}>
-                  <Trash2 size={16} aria-hidden="true" />
+                <button
+                  className="button-secondary px-3 py-2 text-rose-700"
+                  type="button"
+                  onClick={() => onDelete(booking._id)}
+                  disabled={actionStatus === `delete:${booking._id}`}
+                >
+                  {actionStatus === `delete:${booking._id}` ? (
+                    <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+                  ) : (
+                    <Trash2 size={16} aria-hidden="true" />
+                  )}
                   Delete job
                 </button>
               </div>
@@ -2084,7 +2121,7 @@ function SelectedDaySchedule({
   );
 }
 
-function RecentlyDeletedBookings({ bookings, onRestore }) {
+function RecentlyDeletedBookings({ actionStatus, bookings, onRestore }) {
   return (
     <section className="panel p-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -2117,8 +2154,17 @@ function RecentlyDeletedBookings({ bookings, onRestore }) {
                   Deleted {booking.deletedAt ? new Date(booking.deletedAt).toLocaleString("en-GB") : "recently"}
                 </p>
               </div>
-              <button className="button-secondary px-3 py-2" type="button" onClick={() => onRestore(booking._id)}>
-                <RefreshCw size={16} aria-hidden="true" />
+              <button
+                className="button-secondary px-3 py-2"
+                type="button"
+                onClick={() => onRestore(booking._id)}
+                disabled={actionStatus === `restore:${booking._id}`}
+              >
+                {actionStatus === `restore:${booking._id}` ? (
+                  <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+                ) : (
+                  <RefreshCw size={16} aria-hidden="true" />
+                )}
                 Restore
               </button>
             </div>
