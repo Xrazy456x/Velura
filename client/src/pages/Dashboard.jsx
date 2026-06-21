@@ -310,14 +310,22 @@ export default function Dashboard() {
 
   const isAdmin = user?.role === "admin";
 
-  async function loadBookingRecords() {
+  async function loadBookingRecords({ keepBooking } = {}) {
     const cacheBuster = Date.now();
     const [bookingsResponse, deletedBookingsResponse] = await Promise.all([
       apiClient.get("/bookings", { params: { _: cacheBuster } }),
       apiClient.get("/bookings/deleted", { params: { _: cacheBuster } })
     ]);
 
-    setBookings(bookingsResponse.data.bookings || []);
+    const activeBookings = bookingsResponse.data.bookings || [];
+    const visibleBookings = keepBooking
+      ? [
+          ...activeBookings.filter((booking) => booking._id !== keepBooking._id),
+          keepBooking
+        ].sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime())
+      : activeBookings;
+
+    setBookings(visibleBookings);
     setDeletedBookings(deletedBookingsResponse.data.bookings || []);
   }
 
@@ -502,7 +510,7 @@ export default function Dashboard() {
       setBookingForm(createInitialBookingForm());
       setEditingBookingId("");
       setBookingStatus("success");
-      await loadBookingRecords();
+      await loadBookingRecords({ keepBooking: data.booking });
       await loadAuditEvents();
     } catch (requestError) {
       setBookingStatus("error");
