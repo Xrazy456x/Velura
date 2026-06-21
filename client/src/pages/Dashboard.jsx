@@ -67,6 +67,27 @@ const initialEmployeeForm = {
 };
 
 const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const bookingTimeZone = "Europe/London";
+
+function zonedDateParts(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: bookingTimeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    })
+      .formatToParts(date)
+      .filter((part) => ["year", "month", "day"].includes(part.type))
+      .map((part) => [part.type, part.value])
+  );
+}
 
 function formatDateTimeInput(value = new Date()) {
   const date = new Date(value);
@@ -134,17 +155,13 @@ function addMonths(value, amount) {
 }
 
 function dateKey(value) {
-  const date = new Date(value);
+  const parts = zonedDateParts(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (!parts) {
     return "";
   }
 
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0")
-  ].join("-");
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function buildCalendarDays(monthDate) {
@@ -163,7 +180,8 @@ function buildCalendarDays(monthDate) {
 function monthLabel(value) {
   return new Intl.DateTimeFormat("en-GB", {
     month: "long",
-    year: "numeric"
+    year: "numeric",
+    timeZone: bookingTimeZone
   }).format(value);
 }
 
@@ -171,7 +189,8 @@ function shortDateLabel(value) {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "numeric",
-    month: "long"
+    month: "long",
+    timeZone: bookingTimeZone
   }).format(value);
 }
 
@@ -184,7 +203,8 @@ function formatBookingTime(value) {
 
   return date.toLocaleTimeString("en-GB", {
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone: bookingTimeZone
   });
 }
 
@@ -294,7 +314,7 @@ export default function Dashboard() {
   const [bookingStatus, setBookingStatus] = useState("idle");
   const [bookingAction, setBookingAction] = useState("idle");
   const [editingBookingId, setEditingBookingId] = useState("");
-  const [bookingFocusDate, setBookingFocusDate] = useState("");
+  const [bookingFocus, setBookingFocus] = useState(null);
   const [invoiceForm, setInvoiceForm] = useState(() => createInitialInvoiceForm());
   const [invoiceStatus, setInvoiceStatus] = useState("idle");
   const [invoiceAction, setInvoiceAction] = useState("idle");
@@ -327,6 +347,18 @@ export default function Dashboard() {
 
     setBookings(visibleBookings);
     setDeletedBookings(deletedBookingsResponse.data.bookings || []);
+  }
+
+  function focusBookingOnCalendar(booking) {
+    if (!booking?.scheduledFor) {
+      return;
+    }
+
+    setBookingFocus({
+      id: booking._id,
+      date: booking.scheduledFor,
+      updatedAt: Date.now()
+    });
   }
 
   async function loadInvoiceRecords() {
@@ -506,7 +538,7 @@ export default function Dashboard() {
           ? current.map((booking) => (booking._id === editingBookingId ? data.booking : booking))
           : [data.booking, ...current]
       );
-      setBookingFocusDate(data.booking.scheduledFor);
+      focusBookingOnCalendar(data.booking);
       setBookingForm(createInitialBookingForm());
       setEditingBookingId("");
       setBookingStatus("success");
@@ -562,7 +594,7 @@ export default function Dashboard() {
         deletedBy: null
       };
 
-      setBookingFocusDate(optimisticBooking.scheduledFor);
+      focusBookingOnCalendar(optimisticBooking);
       setBookings((current) =>
         [...current.filter((booking) => booking._id !== bookingId), optimisticBooking].sort(
           (a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime()
@@ -575,7 +607,7 @@ export default function Dashboard() {
       const { data } = await apiClient.post(`/bookings/${bookingId}/restore`);
       const restoredBooking = data.booking;
 
-      setBookingFocusDate(restoredBooking.scheduledFor);
+      focusBookingOnCalendar(restoredBooking);
       setBookings((current) =>
         [...current.filter((booking) => booking._id !== bookingId), restoredBooking].sort(
           (a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime()
@@ -1068,7 +1100,7 @@ export default function Dashboard() {
               deletedBookings={deletedBookings}
               editingBookingId={editingBookingId}
               employees={employees}
-              focusDate={bookingFocusDate}
+              focusBooking={bookingFocus}
               leads={leads}
               form={bookingForm}
               status={bookingStatus}
@@ -1784,7 +1816,7 @@ function BookingPanel({
   deletedBookings,
   editingBookingId,
   employees,
-  focusDate,
+  focusBooking,
   leads,
   form,
   status,
@@ -1846,11 +1878,11 @@ function BookingPanel({
   }, [bookings, normalizedSearch]);
 
   useEffect(() => {
-    if (!focusDate) {
+    if (!focusBooking?.date) {
       return;
     }
 
-    const nextSelectedDate = new Date(focusDate);
+    const nextSelectedDate = new Date(focusBooking.date);
 
     if (Number.isNaN(nextSelectedDate.getTime())) {
       return;
@@ -1858,7 +1890,7 @@ function BookingPanel({
 
     setSelectedDate(nextSelectedDate);
     setVisibleMonth(startOfMonth(nextSelectedDate));
-  }, [focusDate]);
+  }, [focusBooking]);
 
   function selectCalendarDay(day) {
     setSelectedDate(day);
