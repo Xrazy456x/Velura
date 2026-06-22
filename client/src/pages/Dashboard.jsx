@@ -141,6 +141,36 @@ function bookingToForm(booking) {
   };
 }
 
+function quoteRequestToBookingForm(quoteRequest) {
+  const quote = quoteRequest.quoteResult || {};
+  const input = quoteRequest.quoteInput || {};
+  const preferredDate = quoteRequest.preferredDate || "";
+  const preferredTime = quoteRequest.preferredTime || "09:00";
+  const preferredDateTime = preferredDate ? `${preferredDate}T${preferredTime}` : createInitialBookingForm().scheduledFor;
+  const guidePrice = quote.displayPrice ? `Guide price: ${quote.displayPrice}` : "";
+  const quoteScope = [quote.serviceLabel || input.serviceType, quote.propertyLabel].filter(Boolean).join(" - ");
+  const notes = [
+    `Created from quote ${quoteRequest.quoteReference}.`,
+    guidePrice,
+    quoteScope ? `Scope: ${quoteScope}` : "",
+    quoteRequest.quoteNotes ? `Client notes: ${quoteRequest.quoteNotes}` : ""
+  ].filter(Boolean);
+
+  return {
+    ...createInitialBookingForm(),
+    clientName: quoteRequest.clientName || "",
+    email: quoteRequest.email || "",
+    phone: quoteRequest.phone || "",
+    service: quote.serviceLabel || input.serviceType || "",
+    address: quoteRequest.address || "",
+    scheduledFor: preferredDateTime,
+    accessInstructions: quoteRequest.accessInstructions || "",
+    parkingNotes: quoteRequest.parkingNotes || "",
+    notes: notes.join("\n"),
+    sendConfirmation: false
+  };
+}
+
 function startOfMonth(value) {
   const date = new Date(value);
   date.setDate(1);
@@ -435,7 +465,7 @@ export default function Dashboard() {
       { label: "Invoices", value: invoices.length, icon: FileText, tone: "coal" },
       { label: "Deleted", value: deletedBookings.length, icon: Trash2, tone: "berry" },
       { label: "Cleaners", value: employees.length, icon: UsersRound, tone: "coral" },
-      { label: "Quote reviews", value: quoteRequests.length, icon: Mail, tone: "berry" },
+      { label: "Quote reviews", value: quoteRequests.filter((quoteRequest) => activeQuoteStatuses.includes(quoteRequest.status)).length, icon: Mail, tone: "berry" },
       { label: "Google rating", value: reviewsMeta?.averageRating ? Number(reviewsMeta.averageRating).toFixed(1) : "N/A", icon: Star, tone: "coal" },
       { label: "Audit events", value: auditEvents.length, icon: History, tone: "leaf" }
     ],
@@ -1021,6 +1051,14 @@ export default function Dashboard() {
     }
   }
 
+  function startBookingFromQuote(quoteRequest) {
+    setBookingForm(quoteRequestToBookingForm(quoteRequest));
+    setEditingBookingId("");
+    setBookingStatus("idle");
+    setError("");
+    setActiveTab("bookings");
+  }
+
   async function loadAuditEvents() {
     const { data } = await apiClient.get("/audit?limit=100");
     setAuditEvents(data.auditEvents || []);
@@ -1091,7 +1129,11 @@ export default function Dashboard() {
         <div className="mt-6">
           {activeTab === "leads" && <LeadTable leads={leads} onStatusChange={updateLeadStatus} />}
           {activeTab === "quotes" && (
-            <QuoteReviewPanel quoteRequests={quoteRequests} onStatusChange={updateQuoteRequestStatus} />
+            <QuoteReviewPanel
+              quoteRequests={quoteRequests}
+              onCreateBooking={startBookingFromQuote}
+              onStatusChange={updateQuoteRequestStatus}
+            />
           )}
           {activeTab === "bookings" && (
             <BookingPanel
@@ -2471,6 +2513,15 @@ function BookingForm({ editingBookingId, employees, leads, form, status, onCance
 }
 
 const quoteStatuses = ["new", "reviewing", "awaiting_photos", "quoted", "booked", "closed"];
+const activeQuoteStatuses = ["new", "reviewing", "awaiting_photos", "quoted"];
+const quoteFilterTabs = [
+  { key: "active", label: "Active", statuses: activeQuoteStatuses },
+  { key: "awaiting_photos", label: "Awaiting photos", statuses: ["awaiting_photos"] },
+  { key: "quoted", label: "Quoted", statuses: ["quoted"] },
+  { key: "booked", label: "Booked", statuses: ["booked"] },
+  { key: "closed", label: "Closed", statuses: ["closed"] },
+  { key: "all", label: "All", statuses: quoteStatuses }
+];
 
 function quoteStatusLabel(value = "") {
   return String(value || "").replace(/_/g, " ");
@@ -2494,16 +2545,41 @@ function buildPhotoRequestMailto(quoteRequest) {
   return `mailto:${quoteRequest.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-function QuoteReviewPanel({ quoteRequests, onStatusChange }) {
+function QuoteReviewPanel({ quoteRequests, onCreateBooking, onStatusChange }) {
+  const [activeQuoteFilter, setActiveQuoteFilter] = useState("active");
+  const activeFilter = quoteFilterTabs.find((filter) => filter.key === activeQuoteFilter) || quoteFilterTabs[0];
+  const visibleQuoteRequests = quoteRequests.filter((quoteRequest) => activeFilter.statuses.includes(quoteRequest.status));
+  const quoteCounts = quoteFilterTabs.reduce(
+    (counts, filter) => ({
+      ...counts,
+      [filter.key]: quoteRequests.filter((quoteRequest) => filter.statuses.includes(quoteRequest.status)).length
+    }),
+    {}
+  );
+
   return (
     <div className="panel overflow-hidden">
       <div className="border-b border-stone-200 bg-white p-5">
         <p className="eyebrow">Quote review</p>
         <h2 className="mt-1 text-2xl font-extrabold text-coal">Review submitted quotes</h2>
         <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-stone-500">
-          Email is the communication channel. Use this queue to check scope, ask for photos, and move the request toward
-          a confirmed booking.
+          The active queue shows quote requests that still need work. Booked and closed quotes stay archived here for
+          audit and follow-up.
         </p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {quoteFilterTabs.map((filter) => (
+            <button
+              className={`rounded-lg px-3 py-2 text-xs font-extrabold transition ${
+                activeQuoteFilter === filter.key ? "bg-coal text-white" : "bg-mist text-stone-600 hover:bg-amber-50 hover:text-coal"
+              }`}
+              key={filter.key}
+              onClick={() => setActiveQuoteFilter(filter.key)}
+              type="button"
+            >
+              {filter.label} ({quoteCounts[filter.key] || 0})
+            </button>
+          ))}
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
@@ -2519,57 +2595,63 @@ function QuoteReviewPanel({ quoteRequests, onStatusChange }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-200">
-            {quoteRequests.map((quoteRequest) => {
+            {visibleQuoteRequests.map((quoteRequest) => {
               const quote = quoteRequest.quoteResult || {};
               const input = quoteRequest.quoteInput || {};
 
               return (
-              <tr key={quoteRequest._id}>
-                <td className="px-4 py-4">
-                  <p className="font-extrabold text-coal">{quoteRequest.quoteReference}</p>
-                  <p className="mt-1 text-xs font-bold text-stone-500">{quoteStatusLabel(quoteRequest.status)}</p>
-                </td>
-                <td className="px-4 py-4">
-                  <p className="font-extrabold text-coal">{quoteRequest.clientName}</p>
-                  <p className="text-stone-500">{quoteRequest.email}</p>
-                  <p className="text-stone-500">{quoteRequest.phone}</p>
-                </td>
-                <td className="px-4 py-4">
-                  <p className="font-extrabold text-coal">{quote.displayPrice || "Quote pending"}</p>
-                  <p className="text-stone-500">{quote.serviceLabel || input.serviceType}</p>
-                  <p className="text-stone-500">{quote.propertyLabel}</p>
-                </td>
-                <td className="max-w-sm px-4 py-4 text-stone-600">
-                  {quoteRequest.address && <p className="font-semibold">{quoteRequest.address}</p>}
-                  <p>{quoteRequest.preferredDate || "No date"} {quoteRequest.preferredTime || ""}</p>
-                  {quoteRequest.accessInstructions && <p className="mt-1">Access: {quoteRequest.accessInstructions}</p>}
-                  {quoteRequest.parkingNotes && <p className="mt-1">Parking: {quoteRequest.parkingNotes}</p>}
-                  {quoteRequest.quoteNotes && <p className="mt-1">Notes: {quoteRequest.quoteNotes}</p>}
-                </td>
-                <td className="px-4 py-4">
-                  <select
-                    className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-700"
-                    value={quoteRequest.status}
-                    onChange={(event) => onStatusChange(quoteRequest._id, event.target.value)}
-                  >
-                    {quoteStatuses.map((status) => (
-                      <option key={status} value={status}>
-                        {quoteStatusLabel(status)}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-4 py-4">
-                  <a className="button-secondary whitespace-nowrap px-3 py-2" href={buildPhotoRequestMailto(quoteRequest)}>
-                    <Mail size={16} aria-hidden="true" />
-                    Ask for photos
-                  </a>
-                </td>
-                <td className="px-4 py-4 text-stone-500">{new Date(quoteRequest.createdAt).toLocaleDateString()}</td>
-              </tr>
+                <tr key={quoteRequest._id}>
+                  <td className="px-4 py-4">
+                    <p className="font-extrabold text-coal">{quoteRequest.quoteReference}</p>
+                    <p className="mt-1 text-xs font-bold text-stone-500">{quoteStatusLabel(quoteRequest.status)}</p>
+                  </td>
+                  <td className="px-4 py-4">
+                    <p className="font-extrabold text-coal">{quoteRequest.clientName}</p>
+                    <p className="text-stone-500">{quoteRequest.email}</p>
+                    <p className="text-stone-500">{quoteRequest.phone}</p>
+                  </td>
+                  <td className="px-4 py-4">
+                    <p className="font-extrabold text-coal">{quote.displayPrice || "Quote pending"}</p>
+                    <p className="text-stone-500">{quote.serviceLabel || input.serviceType}</p>
+                    <p className="text-stone-500">{quote.propertyLabel}</p>
+                  </td>
+                  <td className="max-w-sm px-4 py-4 text-stone-600">
+                    {quoteRequest.address && <p className="font-semibold">{quoteRequest.address}</p>}
+                    <p>{quoteRequest.preferredDate || "No date"} {quoteRequest.preferredTime || ""}</p>
+                    {quoteRequest.accessInstructions && <p className="mt-1">Access: {quoteRequest.accessInstructions}</p>}
+                    {quoteRequest.parkingNotes && <p className="mt-1">Parking: {quoteRequest.parkingNotes}</p>}
+                    {quoteRequest.quoteNotes && <p className="mt-1">Notes: {quoteRequest.quoteNotes}</p>}
+                  </td>
+                  <td className="px-4 py-4">
+                    <select
+                      className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-700"
+                      value={quoteRequest.status}
+                      onChange={(event) => onStatusChange(quoteRequest._id, event.target.value)}
+                    >
+                      {quoteStatuses.map((status) => (
+                        <option key={status} value={status}>
+                          {quoteStatusLabel(status)}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-wrap gap-2">
+                      <a className="button-secondary whitespace-nowrap px-3 py-2" href={buildPhotoRequestMailto(quoteRequest)}>
+                        <Mail size={16} aria-hidden="true" />
+                        Ask photos
+                      </a>
+                      <button className="button-secondary whitespace-nowrap px-3 py-2" type="button" onClick={() => onCreateBooking(quoteRequest)}>
+                        <CalendarCheck size={16} aria-hidden="true" />
+                        Create booking
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 text-stone-500">{new Date(quoteRequest.createdAt).toLocaleDateString()}</td>
+                </tr>
               );
             })}
-            {quoteRequests.length === 0 && <EmptyRow label="No quote requests yet" columns={7} />}
+            {visibleQuoteRequests.length === 0 && <EmptyRow label={`No ${activeFilter.label.toLowerCase()} quote requests.`} columns={7} />}
           </tbody>
         </table>
       </div>
