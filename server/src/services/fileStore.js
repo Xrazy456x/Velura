@@ -645,3 +645,21 @@ export async function listAuditEvents({ limit = 100 } = {}) {
       .slice(0, limit)
   );
 }
+
+export async function getRecordCounts() {
+  const database = await readDatabase();
+  const currentTime = Date.now();
+
+  return {
+    users: database.users.length,
+    leads: database.leads.length,
+    messages: database.messages.length,
+    quoteRequests: database.quoteRequests.length,
+    activeBookings: database.bookings.filter((booking) => !booking.deletedAt).length,
+    deletedBookings: database.bookings.filter((booking) => booking.deletedAt).length,
+    invoices: database.invoices.length,
+    employees: database.employees.length,
+    reviews: database.reviews.length,
+    auditEvents: database.auditEvents.filter((event) => !event.expiresAt || new Date(event.expiresAt).getTime() > currentTime).length
+  };
+}

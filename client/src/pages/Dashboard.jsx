@@ -43,7 +43,8 @@ const tabs = [
   { key: "pricing", label: "Pricing" },
   { key: "reviews", label: "Reviews" },
   { key: "users", label: "Accounts" },
-  { key: "audit", label: "Audit" }
+  { key: "audit", label: "Audit" },
+  { key: "governance", label: "Governance" }
 ];
 
 const initialManagerForm = {
@@ -398,6 +399,7 @@ export default function Dashboard() {
   const [googleReviews, setGoogleReviews] = useState([]);
   const [reviewsMeta, setReviewsMeta] = useState(null);
   const [auditEvents, setAuditEvents] = useState([]);
+  const [governance, setGovernance] = useState(null);
   const [quoteAction, setQuoteAction] = useState("idle");
   const [bookingForm, setBookingForm] = useState(() => createInitialBookingForm());
   const [bookingStatus, setBookingStatus] = useState("idle");
@@ -488,7 +490,8 @@ export default function Dashboard() {
         pricingResponse,
         quoteRequestsResponse,
         reviewsResponse,
-        auditResponse
+        auditResponse,
+        governanceResponse
       ] = await Promise.all([
         apiClient.get("/users"),
         apiClient.get("/leads"),
@@ -499,7 +502,8 @@ export default function Dashboard() {
         apiClient.get("/quote/pricing"),
         apiClient.get("/quote/requests"),
         apiClient.get("/reviews"),
-        apiClient.get("/audit?limit=100")
+        apiClient.get("/audit?limit=100"),
+        apiClient.get("/governance")
       ]);
 
       setUsers(usersResponse.data.users || []);
@@ -513,6 +517,7 @@ export default function Dashboard() {
       setGoogleReviews(reviewsResponse.data.reviews || []);
       setReviewsMeta(reviewsResponse.data.meta || null);
       setAuditEvents(auditResponse.data.auditEvents || []);
+      setGovernance(governanceResponse.data.governance || null);
       setStatus("ready");
     } catch (requestError) {
       setError(getApiError(requestError, "Dashboard data could not be loaded."));
@@ -1271,7 +1276,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-8 rounded-lg border border-stone-200 bg-white p-2">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-9">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -1392,6 +1397,7 @@ export default function Dashboard() {
             </div>
           )}
           {activeTab === "audit" && <AuditTable auditEvents={auditEvents} />}
+          {activeTab === "governance" && <GovernancePanel governance={governance} />}
         </div>
       )}
     </section>
@@ -3067,6 +3073,110 @@ function UserTable({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function GovernancePanel({ governance }) {
+  if (!governance) {
+    return (
+      <div className="panel p-5 text-sm font-semibold text-stone-500">
+        Governance summary is not available yet.
+      </div>
+    );
+  }
+
+  const counts = governance.counts || {};
+  const countItems = [
+    ["Users", counts.users],
+    ["Leads", counts.leads],
+    ["Quotes", counts.quoteRequests],
+    ["Active bookings", counts.activeBookings],
+    ["Deleted bookings", counts.deletedBookings],
+    ["Invoices", counts.invoices],
+    ["Cleaners", counts.employees],
+    ["Audit events", counts.auditEvents]
+  ];
+
+  return (
+    <div className="grid gap-6">
+      <section className="panel p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="eyebrow">Data governance</p>
+            <h2 className="mt-1 text-2xl font-extrabold text-coal">Retention and accountability</h2>
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-stone-500">
+              Velura keeps current operational records in MongoDB, keeps important action history in the audit log, and
+              avoids storing unnecessary duplicate communication content inside the portal.
+            </p>
+          </div>
+          <div className="rounded-lg bg-mist px-4 py-3 text-sm font-bold text-stone-600">
+            <p>Database: <span className="capitalize text-coal">{governance.databaseMode}</span></p>
+            <p className="mt-1">Audit retention: <span className="text-coal">{governance.auditLogRetentionDays} days</span></p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {countItems.map(([label, value]) => (
+            <div className="rounded-lg border border-stone-200 bg-mist p-4" key={label}>
+              <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-stone-500">{label}</p>
+              <p className="mt-2 text-2xl font-extrabold text-coal">{value ?? 0}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel p-5">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-lg bg-amber-50 text-coral">
+            <ShieldCheck size={20} aria-hidden="true" />
+          </div>
+          <div>
+            <p className="eyebrow">Controls</p>
+            <h3 className="text-xl font-extrabold text-coal">How the portal protects the workflow</h3>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {(governance.controls || []).map((control) => (
+            <div className="rounded-lg border border-stone-200 bg-white p-4 text-sm font-semibold leading-6 text-stone-600" key={control}>
+              {control}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel overflow-hidden">
+        <div className="border-b border-stone-200 bg-white p-5">
+          <p className="eyebrow">Retention policy</p>
+          <h3 className="mt-1 text-xl font-extrabold text-coal">Recommended Velura data lifecycle</h3>
+          <p className="mt-2 text-sm font-semibold leading-6 text-stone-500">
+            This is a practical operating policy for the portal. It should be reviewed as the business grows or if your
+            accountant, insurer, or legal adviser gives a stricter requirement.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
+            <thead className="bg-mist text-xs font-bold uppercase tracking-wide text-stone-500">
+              <tr>
+                <th className="px-4 py-3">Area</th>
+                <th className="px-4 py-3">Records</th>
+                <th className="px-4 py-3">Retention</th>
+                <th className="px-4 py-3">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-200">
+              {(governance.retentionPolicy || []).map((rule) => (
+                <tr key={rule.area}>
+                  <td className="px-4 py-4 font-extrabold text-coal">{rule.area}</td>
+                  <td className="max-w-xs px-4 py-4 text-stone-600">{rule.records}</td>
+                  <td className="px-4 py-4 font-bold text-stone-700">{rule.retention}</td>
+                  <td className="max-w-sm px-4 py-4 text-stone-600">{rule.action}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
