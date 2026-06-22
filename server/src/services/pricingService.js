@@ -291,7 +291,7 @@ function formatRange(minPennies, maxPennies) {
     return "Quoted after inspection";
   }
 
-  return minPennies === maxPennies ? formatMoney(minPennies) : `${formatMoney(minPennies)} - ${formatMoney(maxPennies)}`;
+  return minPennies === maxPennies ? formatMoney(minPennies) : `${formatMoney(minPennies)}-${formatMoney(maxPennies)}`;
 }
 
 function clampNumber(value, min, max) {

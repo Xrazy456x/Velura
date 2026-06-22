@@ -288,7 +288,7 @@ export default function Quote() {
   return (
     <section className="bg-mist py-10 sm:py-14">
       <div className="section-shell">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.65fr)] lg:items-end">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.8fr)] lg:items-end">
           <div className="animate-floatIn">
             <p className="eyebrow">Velura instant quote</p>
             <h1 className="mt-3 max-w-4xl text-4xl font-extrabold leading-tight text-coal sm:text-5xl">
@@ -299,10 +299,10 @@ export default function Quote() {
               guide price before you send the inquiry.
             </p>
           </div>
-          <div className="panel flex items-center gap-4 p-4">
+          <div className="panel flex min-h-28 items-center gap-4 p-5">
             <img className="h-14 w-14 rounded-lg object-contain" src={site.mark} alt="" />
             <div>
-              <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-coral">{site.name}</p>
+              <p className="text-sm font-extrabold uppercase tracking-[0.12em] text-coral">{site.name}</p>
               <p className="mt-1 text-sm font-semibold leading-6 text-stone-600">{site.tagline}</p>
             </div>
           </div>
@@ -314,15 +314,17 @@ export default function Quote() {
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
                 {steps.map((step, index) => (
                   <button
-                    className={`rounded-lg px-3 py-2 text-xs font-extrabold transition ${
+                    className={`grid min-h-14 place-items-center rounded-lg px-2 py-2 text-center text-xs font-extrabold leading-none transition ${
                       activeStep === index ? "bg-coal text-white" : "bg-mist text-stone-600 hover:text-coal"
                     }`}
                     key={step}
                     onClick={() => setActiveStep(index)}
                     type="button"
                   >
-                    <span className="mr-1 text-coral">{index + 1}</span>
-                    {step}
+                    <span className="inline-flex items-center justify-center gap-1 whitespace-nowrap">
+                      <span className="text-coral">{index + 1}</span>
+                      <span>{step}</span>
+                    </span>
                   </button>
                 ))}
               </div>
@@ -719,7 +721,7 @@ function QuoteResult({ compact = false, error, quote, status }) {
           </div>
         )}
         <p className="min-h-6 pr-28 text-sm font-bold text-stone-300">{quote.propertyLabel}</p>
-        <p className="mt-2 min-h-[3.25rem] text-4xl font-extrabold leading-tight text-gold tabular-nums">{quote.displayPrice}</p>
+        <p className="mt-2 min-h-[3.25rem] whitespace-nowrap text-4xl font-extrabold leading-tight text-gold tabular-nums">{quote.displayPrice}</p>
         {quote.estimatedDurationHours && (
           <p className="mt-2 min-h-6 text-sm font-semibold text-stone-200">
             Estimated duration: <span className="tabular-nums">{quote.estimatedDurationHours}</span> hours
