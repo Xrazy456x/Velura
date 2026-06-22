@@ -578,7 +578,7 @@ export default function Quote() {
                         className="input-field min-h-28 resize-none"
                         value={form.quoteNotes}
                         onChange={(event) => updateField("quoteNotes", event.target.value)}
-                        placeholder="Anything we should check before confirming the final price."
+                        placeholder="Anything we should review before confirming the scope or requesting photos."
                       />
                     </label>
                   </div>
@@ -589,8 +589,8 @@ export default function Quote() {
                 <section className="grid gap-5">
                   <StepTitle icon={CheckCircle2} eyebrow="Step 8 of 8" title="Ready to send" />
                   <div className="rounded-lg bg-mist p-4 text-sm font-semibold leading-6 text-stone-700">
-                    Your quote request will go straight to the Velura manager portal for review. If the scope needs
-                    checking, we may reply by email asking for photos before confirming the final price.
+                    Your quote request will go straight to the Velura manager portal for review. This is a guide
+                    estimate, and we may reply by email asking for photos before confirming the scope and price.
                   </div>
                   {quoteSubmitStatus === "success" ? (
                     <div className="rounded-lg bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
