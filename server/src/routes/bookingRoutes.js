@@ -12,6 +12,8 @@ import {
   sendBookingCleanerBriefEmail,
   sendBookingEmailConfirmation,
   updateBooking,
+  updateBookingOwnership,
+  updateBookingOwnershipSchema,
   updateBookingSchema,
   updateBookingStatus,
   updateBookingStatusSchema
@@ -32,5 +34,6 @@ router.post("/:id/email-confirmation", validate(bookingIdSchema), sendBookingEma
 router.post("/:id/cleaner-brief", validate(bookingIdSchema), sendBookingCleanerBriefEmail);
 router.post("/:id/phone-confirmation", validate(markPhoneConfirmationSchema), markBookingPhoneConfirmed);
 router.patch("/:id/status", validate(updateBookingStatusSchema), updateBookingStatus);
+router.patch("/:id/ownership", validate(updateBookingOwnershipSchema), updateBookingOwnership);
 
 export default router;

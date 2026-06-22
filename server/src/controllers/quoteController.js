@@ -32,6 +32,7 @@ const quoteInputSchema = z.object({
 });
 
 const quoteStatuses = ["new", "reviewing", "awaiting_photos", "quoted", "booked", "closed"];
+const communicationStatuses = ["new", "in_progress", "waiting_client", "booked", "closed"];
 
 export const calculateQuoteSchema = z.object({
   body: quoteInputSchema
@@ -66,6 +67,86 @@ export const quoteRequestIdSchema = z.object({
     id: z.string().min(1)
   })
 });
+
+export const updateQuoteRequestOwnershipSchema = z.object({
+  params: z.object({
+    id: z.string().min(1)
+  }),
+  body: z.object({
+    action: z.enum(["take", "release"]),
+    communicationStatus: z.enum(communicationStatuses).optional()
+  })
+});
+
+function userId(user) {
+  return String(user?._id || user?.id || "");
+}
+
+function ownerId(record) {
+  const owner = record?.assignedManager;
+  return String(typeof owner === "object" ? owner?._id || owner?.id || "" : owner || "");
+}
+
+function ownerName(record) {
+  const owner = record?.assignedManager;
+
+  if (!owner) {
+    return "another manager";
+  }
+
+  if (typeof owner === "object") {
+    return owner.name || owner.email || "another manager";
+  }
+
+  return "another manager";
+}
+
+function isOwnedByAnotherManager(record, user) {
+  const currentOwner = ownerId(record);
+  return Boolean(currentOwner && currentOwner !== userId(user));
+}
+
+function sendOwnershipConflict(res, record) {
+  return res.status(409).json({
+    message: `This quote is owned by ${ownerName(record)}. Ask them to release it before emailing the client.`
+  });
+}
+
+function communicationStatusForQuoteStatus(status) {
+  if (status === "awaiting_photos") {
+    return "waiting_client";
+  }
+
+  if (status === "booked") {
+    return "booked";
+  }
+
+  if (status === "closed") {
+    return "closed";
+  }
+
+  if (status === "new") {
+    return "new";
+  }
+
+  return "in_progress";
+}
+
+function ownerUpdates(req, communicationStatus = "in_progress") {
+  return {
+    assignedManager: req.user?._id || req.user?.id || null,
+    communicationStatus
+  };
+}
+
+function clientContactUpdates(req, type, communicationStatus = "waiting_client") {
+  return {
+    ...ownerUpdates(req, communicationStatus),
+    lastClientContactedAt: new Date(),
+    lastClientContactedBy: req.user?._id || req.user?.id || null,
+    lastClientContactType: type
+  };
+}
 
 export const getQuote = asyncHandler(async (req, res) => {
   return res.json({ quote: calculateQuote(req.validated.body) });
@@ -132,17 +213,38 @@ export const listQuoteRequests = asyncHandler(async (req, res) => {
     return res.json({ quoteRequests });
   }
 
-  const quoteRequests = await QuoteRequest.find().sort({ createdAt: -1 }).limit(200);
+  const quoteRequests = await QuoteRequest.find()
+    .sort({ createdAt: -1 })
+    .limit(200)
+    .populate("assignedManager", "name email")
+    .populate("lastClientContactedBy", "name email");
   return res.json({ quoteRequests });
 });
 
 export const updateQuoteRequestStatus = asyncHandler(async (req, res) => {
   const { id } = req.validated.params;
   const { status } = req.validated.body;
-  const before = useFileDatabase() ? await fileStore.findQuoteRequestById(id) : await QuoteRequest.findById(id).lean();
+  const before = useFileDatabase()
+    ? await fileStore.findQuoteRequestById(id)
+    : await QuoteRequest.findById(id).populate("assignedManager", "name email").lean();
+
+  if (!before) {
+    return res.status(404).json({ message: "Quote request not found." });
+  }
+
+  if (isOwnedByAnotherManager(before, req.user)) {
+    return sendOwnershipConflict(res, before);
+  }
+
+  const updates = {
+    status,
+    ...ownerUpdates(req, communicationStatusForQuoteStatus(status))
+  };
   const quoteRequest = useFileDatabase()
-    ? await fileStore.updateQuoteRequest(id, { status })
-    : await QuoteRequest.findByIdAndUpdate(id, { status }, { new: true, runValidators: true });
+    ? await fileStore.updateQuoteRequest(id, updates)
+    : await QuoteRequest.findByIdAndUpdate(id, updates, { new: true, runValidators: true })
+        .populate("assignedManager", "name email")
+        .populate("lastClientContactedBy", "name email");
 
   if (!quoteRequest) {
     return res.status(404).json({ message: "Quote request not found." });
@@ -164,10 +266,16 @@ export const updateQuoteRequestStatus = asyncHandler(async (req, res) => {
 
 export const sendQuotePhotoRequest = asyncHandler(async (req, res) => {
   const { id } = req.validated.params;
-  const before = useFileDatabase() ? await fileStore.findQuoteRequestById(id) : await QuoteRequest.findById(id).lean();
+  const before = useFileDatabase()
+    ? await fileStore.findQuoteRequestById(id)
+    : await QuoteRequest.findById(id).populate("assignedManager", "name email").lean();
 
   if (!before) {
     return res.status(404).json({ message: "Quote request not found." });
+  }
+
+  if (isOwnedByAnotherManager(before, req.user)) {
+    return sendOwnershipConflict(res, before);
   }
 
   let photoRequestEmail;
@@ -185,11 +293,14 @@ export const sendQuotePhotoRequest = asyncHandler(async (req, res) => {
 
   const updates = {
     status: "awaiting_photos",
-    photoRequestSentAt: new Date()
+    photoRequestSentAt: new Date(),
+    ...clientContactUpdates(req, "photo_request", "waiting_client")
   };
   const quoteRequest = useFileDatabase()
     ? await fileStore.updateQuoteRequest(id, updates)
-    : await QuoteRequest.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+    : await QuoteRequest.findByIdAndUpdate(id, updates, { new: true, runValidators: true })
+        .populate("assignedManager", "name email")
+        .populate("lastClientContactedBy", "name email");
 
   await recordAuditEvent(req, {
     action: "quote_request.photo_request_sent",
@@ -204,4 +315,51 @@ export const sendQuotePhotoRequest = asyncHandler(async (req, res) => {
   });
 
   return res.json({ quoteRequest, photoRequestEmail });
+});
+
+export const updateQuoteRequestOwnership = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const { action, communicationStatus } = req.validated.body;
+  const before = useFileDatabase()
+    ? await fileStore.findQuoteRequestById(id)
+    : await QuoteRequest.findById(id).populate("assignedManager", "name email").lean();
+
+  if (!before) {
+    return res.status(404).json({ message: "Quote request not found." });
+  }
+
+  const updates =
+    action === "take"
+      ? ownerUpdates(req, communicationStatus || before.communicationStatus || "in_progress")
+      : {
+          assignedManager: null,
+          communicationStatus: communicationStatus || communicationStatusForQuoteStatus(before.status)
+        };
+  const quoteRequest = useFileDatabase()
+    ? await fileStore.updateQuoteRequest(id, updates)
+    : await QuoteRequest.findByIdAndUpdate(id, updates, { new: true, runValidators: true })
+        .populate("assignedManager", "name email")
+        .populate("lastClientContactedBy", "name email");
+
+  await recordAuditEvent(req, {
+    action: action === "take" ? "quote_request.ownership_taken" : "quote_request.ownership_released",
+    resource: "quoteRequest",
+    resourceId: quoteRequest._id,
+    summary:
+      action === "take"
+        ? `Quote ${quoteRequest.quoteReference} assigned to ${req.user?.name || req.user?.email}.`
+        : `Quote ${quoteRequest.quoteReference} ownership released.`,
+    metadata: {
+      before: {
+        assignedManager: before.assignedManager,
+        communicationStatus: before.communicationStatus
+      },
+      after: {
+        assignedManager: quoteRequest.assignedManager,
+        communicationStatus: quoteRequest.communicationStatus
+      }
+    }
+  });
+
+  return res.json({ quoteRequest });
 });

@@ -107,6 +107,32 @@ const bookingSchema = new mongoose.Schema(
       ],
       default: []
     },
+    assignedManager: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true
+    },
+    communicationStatus: {
+      type: String,
+      enum: ["new", "in_progress", "waiting_client", "booked", "closed"],
+      default: "new",
+      index: true
+    },
+    lastClientContactedAt: {
+      type: Date,
+      default: null
+    },
+    lastClientContactedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
+    lastClientContactType: {
+      type: String,
+      enum: ["email", "sms", "phone", "photo_request", "status_update", ""],
+      default: ""
+    },
     accessInstructions: {
       type: String,
       trim: true,

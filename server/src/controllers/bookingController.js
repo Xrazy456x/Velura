@@ -17,6 +17,7 @@ import * as fileStore from "../services/fileStore.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const bookingStatuses = ["scheduled", "confirmed", "completed", "cancelled"];
+const communicationStatuses = ["new", "in_progress", "waiting_client", "booked", "closed"];
 const firstBookingSequence = 100;
 const bookingSequenceFloor = firstBookingSequence - 1;
 
@@ -125,6 +126,16 @@ export const markPhoneConfirmationSchema = z.object({
   })
 });
 
+export const updateBookingOwnershipSchema = z.object({
+  params: z.object({
+    id: z.string().min(1)
+  }),
+  body: z.object({
+    action: z.enum(["take", "release"]),
+    communicationStatus: z.enum(communicationStatuses).optional()
+  })
+});
+
 function buildCommunicationLog(channel, type, result) {
   return {
     channel,
@@ -132,6 +143,68 @@ function buildCommunicationLog(channel, type, result) {
     status: result?.status || (result?.sent ? "sent" : "skipped"),
     detail: result?.detail || (result?.sent ? "Message sent successfully." : result?.reason || "Message was not sent."),
     sentAt: new Date()
+  };
+}
+
+function userId(user) {
+  return String(user?._id || user?.id || "");
+}
+
+function ownerId(record) {
+  const owner = record?.assignedManager;
+  return String(typeof owner === "object" ? owner?._id || owner?.id || "" : owner || "");
+}
+
+function ownerName(record) {
+  const owner = record?.assignedManager;
+
+  if (!owner) {
+    return "another manager";
+  }
+
+  if (typeof owner === "object") {
+    return owner.name || owner.email || "another manager";
+  }
+
+  return "another manager";
+}
+
+function isOwnedByAnotherManager(record, user) {
+  const currentOwner = ownerId(record);
+  return Boolean(currentOwner && currentOwner !== userId(user));
+}
+
+function sendOwnershipConflict(res, record) {
+  return res.status(409).json({
+    message: `This client thread is owned by ${ownerName(record)}. Ask them to release it before emailing the client.`
+  });
+}
+
+function communicationStatusForBookingStatus(status) {
+  if (status === "confirmed") {
+    return "booked";
+  }
+
+  if (status === "completed" || status === "cancelled") {
+    return "closed";
+  }
+
+  return "in_progress";
+}
+
+function ownerUpdates(req, communicationStatus = "in_progress") {
+  return {
+    assignedManager: req.user?._id || req.user?.id || null,
+    communicationStatus
+  };
+}
+
+function clientContactUpdates(req, type, communicationStatus = "waiting_client") {
+  return {
+    ...ownerUpdates(req, communicationStatus),
+    lastClientContactedAt: new Date(),
+    lastClientContactedBy: req.user?._id || req.user?.id || null,
+    lastClientContactType: type
   };
 }
 
@@ -175,7 +248,9 @@ async function findEmployees(employeeIds = []) {
 }
 
 async function findBooking(id) {
-  return useFileDatabase() ? fileStore.findBookingById(id) : Booking.findById(id).lean();
+  return useFileDatabase()
+    ? fileStore.findBookingById(id)
+    : Booking.findById(id).populate("assignedManager", "name email").populate("lastClientContactedBy", "name email").lean();
 }
 
 async function findBookingWithAssignedEmployees(id) {
@@ -197,6 +272,8 @@ async function findBookingWithAssignedEmployees(id) {
     .populate("lead", "status service name email phone company message")
     .populate("assignedEmployees", "name email phone role status")
     .populate("createdBy", "name email")
+    .populate("assignedManager", "name email")
+    .populate("lastClientContactedBy", "name email")
     .lean();
 }
 
@@ -212,7 +289,9 @@ async function updateBookingRecord(id, updates) {
   return Booking.findByIdAndUpdate(id, updates, { new: true, runValidators: true })
     .populate("lead", "status service name email phone company message")
     .populate("assignedEmployees", "name email phone role status")
-    .populate("createdBy", "name email");
+    .populate("createdBy", "name email")
+    .populate("assignedManager", "name email")
+    .populate("lastClientContactedBy", "name email");
 }
 
 function normalizeBookingPayload(payload, req, lead, employees = []) {
@@ -229,6 +308,8 @@ function normalizeBookingPayload(payload, req, lead, employees = []) {
     status: "scheduled",
     communicationPreference: payload.communicationPreference,
     assignedEmployees: employees.map((employee) => employee._id),
+    assignedManager: req.user?._id || req.user?.id || null,
+    communicationStatus: "in_progress",
     accessInstructions: payload.accessInstructions || "",
     parkingNotes: payload.parkingNotes || "",
     notes: payload.notes || "",
@@ -273,17 +354,19 @@ function normalizeBookingUpdates(payload, lead, employees = []) {
   };
 }
 
-async function persistCommunicationLog(booking, logEntry) {
+async function persistCommunicationLog(booking, logEntry, updates = {}) {
   const communicationLog = [...(booking.communicationLog || []), logEntry];
 
   if (useFileDatabase()) {
-    return fileStore.updateBooking(booking._id, { communicationLog });
+    return fileStore.updateBooking(booking._id, { communicationLog, ...updates });
   }
 
-  return Booking.findByIdAndUpdate(booking._id, { communicationLog }, { new: true, runValidators: true })
+  return Booking.findByIdAndUpdate(booking._id, { communicationLog, ...updates }, { new: true, runValidators: true })
     .populate("lead", "status service name email phone company message")
     .populate("assignedEmployees", "name email phone role status")
-    .populate("createdBy", "name email");
+    .populate("createdBy", "name email")
+    .populate("assignedManager", "name email")
+    .populate("lastClientContactedBy", "name email");
 }
 
 export const createBooking = asyncHandler(async (req, res) => {
@@ -327,15 +410,24 @@ export const createBooking = asyncHandler(async (req, res) => {
 
   if (payload.sendConfirmation && payload.communicationPreference === "email") {
     clientCommunication = await attemptClientCommunication(() => sendBookingConfirmation(booking));
-    booking = await persistCommunicationLog(booking, buildCommunicationLog("email", "booking_confirmation", clientCommunication));
+    booking = await persistCommunicationLog(
+      booking,
+      buildCommunicationLog("email", "booking_confirmation", clientCommunication),
+      clientCommunication?.sent ? clientContactUpdates(req, "email", "booked") : ownerUpdates(req, "in_progress")
+    );
   } else if (payload.sendConfirmation && payload.communicationPreference === "sms") {
     clientCommunication = await attemptClientCommunication(() => sendBookingSmsConfirmation(booking));
-    booking = await persistCommunicationLog(booking, buildCommunicationLog("sms", "booking_confirmation", clientCommunication));
+    booking = await persistCommunicationLog(
+      booking,
+      buildCommunicationLog("sms", "booking_confirmation", clientCommunication),
+      clientCommunication?.sent ? clientContactUpdates(req, "sms", "booked") : ownerUpdates(req, "in_progress")
+    );
   } else if (payload.sendConfirmation && payload.communicationPreference === "phone") {
     clientCommunication = { sent: false, reason: "Phone call selected for manual follow-up" };
     booking = await persistCommunicationLog(
       booking,
-      buildCommunicationLog(payload.communicationPreference, "booking_confirmation", clientCommunication)
+      buildCommunicationLog(payload.communicationPreference, "booking_confirmation", clientCommunication),
+      ownerUpdates(req, "in_progress")
     );
   }
 
@@ -377,7 +469,9 @@ export const listBookings = asyncHandler(async (req, res) => {
     .sort({ scheduledFor: 1, createdAt: -1 })
     .populate("lead", "status service name email phone company message")
     .populate("assignedEmployees", "name email phone role status")
-    .populate("createdBy", "name email");
+    .populate("createdBy", "name email")
+    .populate("assignedManager", "name email")
+    .populate("lastClientContactedBy", "name email");
 
   return res.json({ bookings });
 });
@@ -394,7 +488,9 @@ export const listDeletedBookings = asyncHandler(async (req, res) => {
     .populate("lead", "status service name email phone company message")
     .populate("assignedEmployees", "name email phone role status")
     .populate("createdBy", "name email")
-    .populate("deletedBy", "name email");
+    .populate("deletedBy", "name email")
+    .populate("assignedManager", "name email")
+    .populate("lastClientContactedBy", "name email");
 
   return res.json({ bookings });
 });
@@ -411,7 +507,9 @@ export const deleteBooking = asyncHandler(async (req, res) => {
         .populate("lead", "status service name email phone company message")
         .populate("assignedEmployees", "name email phone role status")
         .populate("createdBy", "name email")
-        .populate("deletedBy", "name email");
+        .populate("deletedBy", "name email")
+        .populate("assignedManager", "name email")
+        .populate("lastClientContactedBy", "name email");
 
   if (!booking) {
     return res.status(404).json({ message: "Booking not found." });
@@ -439,7 +537,9 @@ export const restoreBooking = asyncHandler(async (req, res) => {
       )
         .populate("lead", "status service name email phone company message")
         .populate("assignedEmployees", "name email phone role status")
-        .populate("createdBy", "name email");
+        .populate("createdBy", "name email")
+        .populate("assignedManager", "name email")
+        .populate("lastClientContactedBy", "name email");
 
   if (!booking) {
     return res.status(404).json({ message: "Deleted booking not found." });
@@ -533,10 +633,18 @@ export const sendBookingEmailConfirmation = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Booking not found." });
   }
 
+  if (isOwnedByAnotherManager(booking, req.user)) {
+    return sendOwnershipConflict(res, booking);
+  }
+
   const clientCommunication = await attemptClientCommunication(() => sendBookingConfirmation(booking));
+  const contactUpdates = clientCommunication?.sent
+    ? clientContactUpdates(req, "email", "booked")
+    : ownerUpdates(req, "in_progress");
   booking = await persistCommunicationLog(
     booking,
-    buildCommunicationLog("email", "booking_confirmation", clientCommunication)
+    buildCommunicationLog("email", "booking_confirmation", clientCommunication),
+    contactUpdates
   );
 
   await recordAuditEvent(req, {
@@ -593,6 +701,10 @@ export const markBookingPhoneConfirmed = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Booking not found." });
   }
 
+  if (isOwnedByAnotherManager(before, req.user)) {
+    return sendOwnershipConflict(res, before);
+  }
+
   let booking = await updateBookingRecord(id, { status: "confirmed" });
   const clientCommunication = {
     sent: false,
@@ -601,7 +713,8 @@ export const markBookingPhoneConfirmed = asyncHandler(async (req, res) => {
   };
   booking = await persistCommunicationLog(
     booking,
-    buildCommunicationLog("phone", "phone_confirmation", clientCommunication)
+    buildCommunicationLog("phone", "phone_confirmation", clientCommunication),
+    clientContactUpdates(req, "phone", "booked")
   );
 
   await recordAuditEvent(req, {
@@ -628,26 +741,48 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Booking not found." });
   }
 
+  if (sendClientUpdate && isOwnedByAnotherManager(before, req.user)) {
+    return sendOwnershipConflict(res, before);
+  }
+
+  const statusOwnerUpdates = sendClientUpdate
+    ? ownerUpdates(req, communicationStatusForBookingStatus(status))
+    : {};
   let booking = useFileDatabase()
-    ? await fileStore.updateBooking(id, { status })
-    : await Booking.findByIdAndUpdate(id, { status }, { new: true, runValidators: true })
+    ? await fileStore.updateBooking(id, { status, ...statusOwnerUpdates })
+    : await Booking.findByIdAndUpdate(id, { status, ...statusOwnerUpdates }, { new: true, runValidators: true })
         .populate("lead", "status service name email phone company message")
         .populate("assignedEmployees", "name email phone role status")
-        .populate("createdBy", "name email");
+        .populate("createdBy", "name email")
+        .populate("assignedManager", "name email")
+        .populate("lastClientContactedBy", "name email");
 
   let clientCommunication = { sent: false, reason: "Client update not requested" };
 
   if (sendClientUpdate && booking.communicationPreference === "email") {
     clientCommunication = await attemptClientCommunication(() => sendBookingStatusUpdate(booking, before.status));
-    booking = await persistCommunicationLog(booking, buildCommunicationLog("email", "booking_status_update", clientCommunication));
+    booking = await persistCommunicationLog(
+      booking,
+      buildCommunicationLog("email", "booking_status_update", clientCommunication),
+      clientCommunication?.sent
+        ? clientContactUpdates(req, "status_update", communicationStatusForBookingStatus(status))
+        : statusOwnerUpdates
+    );
   } else if (sendClientUpdate && booking.communicationPreference === "sms") {
     clientCommunication = await attemptClientCommunication(() => sendBookingSmsStatusUpdate(booking, before.status));
-    booking = await persistCommunicationLog(booking, buildCommunicationLog("sms", "booking_status_update", clientCommunication));
+    booking = await persistCommunicationLog(
+      booking,
+      buildCommunicationLog("sms", "booking_status_update", clientCommunication),
+      clientCommunication?.sent
+        ? clientContactUpdates(req, "status_update", communicationStatusForBookingStatus(status))
+        : statusOwnerUpdates
+    );
   } else if (sendClientUpdate && booking.communicationPreference === "phone") {
     clientCommunication = { sent: false, reason: "Phone call selected for manual follow-up" };
     booking = await persistCommunicationLog(
       booking,
-      buildCommunicationLog(booking.communicationPreference, "booking_status_update", clientCommunication)
+      buildCommunicationLog(booking.communicationPreference, "booking_status_update", clientCommunication),
+      statusOwnerUpdates
     );
   }
 
@@ -664,4 +799,45 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
   });
 
   return res.json({ booking, clientCommunication });
+});
+
+export const updateBookingOwnership = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const { action, communicationStatus } = req.validated.body;
+  const before = await findBooking(id);
+
+  if (!before || isDeletedBooking(before)) {
+    return res.status(404).json({ message: "Booking not found." });
+  }
+
+  const updates =
+    action === "take"
+      ? ownerUpdates(req, communicationStatus || before.communicationStatus || "in_progress")
+      : {
+          assignedManager: null,
+          communicationStatus: communicationStatus || communicationStatusForBookingStatus(before.status)
+        };
+  const booking = await updateBookingRecord(id, updates);
+
+  await recordAuditEvent(req, {
+    action: action === "take" ? "booking.ownership_taken" : "booking.ownership_released",
+    resource: "booking",
+    resourceId: booking._id,
+    summary:
+      action === "take"
+        ? `Booking ${booking.bookingNumber || booking._id} assigned to ${req.user?.name || req.user?.email}.`
+        : `Booking ${booking.bookingNumber || booking._id} ownership released.`,
+    metadata: {
+      before: {
+        assignedManager: before.assignedManager,
+        communicationStatus: before.communicationStatus
+      },
+      after: {
+        assignedManager: booking.assignedManager,
+        communicationStatus: booking.communicationStatus
+      }
+    }
+  });
+
+  return res.json({ booking });
 });

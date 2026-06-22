@@ -326,6 +326,61 @@ function bookingCleanerEmails(booking, employees = []) {
   return bookingAssignedCleaners(booking, employees).filter((employee) => employee?.email);
 }
 
+function recordUserId(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "object") {
+    return String(value._id || value.id || "");
+  }
+
+  return String(value);
+}
+
+function recordUserLabel(value, users = []) {
+  if (!value) {
+    return "Unassigned";
+  }
+
+  if (typeof value === "object") {
+    return value.name || value.email || "Assigned manager";
+  }
+
+  const match = users.find((account) => recordUserId(account) === recordUserId(value));
+  return match?.name || match?.email || "Assigned manager";
+}
+
+function isOwnedByCurrentUser(record, user) {
+  const owner = recordUserId(record?.assignedManager);
+  return Boolean(owner && owner === recordUserId(user));
+}
+
+function isOwnedByAnotherUser(record, user) {
+  const owner = recordUserId(record?.assignedManager);
+  return Boolean(owner && owner !== recordUserId(user));
+}
+
+function communicationStatusLabel(value = "new") {
+  return String(value || "new").replace(/_/g, " ");
+}
+
+function OwnershipBadge({ record, users = [] }) {
+  const hasOwner = Boolean(recordUserId(record?.assignedManager));
+  const label = recordUserLabel(record?.assignedManager, users);
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-extrabold ${
+        hasOwner ? "bg-coal text-white" : "bg-stone-100 text-stone-600"
+      }`}
+    >
+      <ShieldCheck size={13} aria-hidden="true" />
+      {hasOwner ? `Owned by ${label}` : "Unassigned"}
+    </span>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("leads");
@@ -753,6 +808,32 @@ export default function Dashboard() {
     }
   }
 
+  async function updateBookingOwnership(booking, action) {
+    if (action === "take" && isOwnedByAnotherUser(booking, user)) {
+      const owner = recordUserLabel(booking.assignedManager, users);
+
+      if (!window.confirm(`This booking is currently owned by ${owner}. Take it over?`)) {
+        return;
+      }
+    }
+
+    setError("");
+    setBookingAction(`owner:${booking._id}`);
+
+    try {
+      const { data } = await apiClient.patch(`/bookings/${booking._id}/ownership`, { action });
+      setBookings((current) => current.map((item) => (item._id === booking._id ? data.booking : item)));
+      await loadAuditEvents();
+      showToast(action === "take" ? "Booking ownership updated." : "Booking ownership released.");
+    } catch (requestError) {
+      const message = getApiError(requestError, "Booking ownership could not be updated.");
+      setError(message);
+      showToast(message, "error");
+    } finally {
+      setBookingAction("idle");
+    }
+  }
+
   function updateInvoiceForm(event) {
     const { name, value } = event.target;
     setInvoiceStatus("idle");
@@ -1107,6 +1188,34 @@ export default function Dashboard() {
     }
   }
 
+  async function updateQuoteOwnership(quoteRequest, action) {
+    if (action === "take" && isOwnedByAnotherUser(quoteRequest, user)) {
+      const owner = recordUserLabel(quoteRequest.assignedManager, users);
+
+      if (!window.confirm(`This quote is currently owned by ${owner}. Take it over?`)) {
+        return;
+      }
+    }
+
+    setError("");
+    setQuoteAction(`owner:${quoteRequest._id}`);
+
+    try {
+      const { data } = await apiClient.patch(`/quote/requests/${quoteRequest._id}/ownership`, { action });
+      setQuoteRequests((current) =>
+        current.map((item) => (item._id === quoteRequest._id ? data.quoteRequest : item))
+      );
+      await loadAuditEvents();
+      showToast(action === "take" ? "Quote ownership updated." : "Quote ownership released.");
+    } catch (requestError) {
+      const message = getApiError(requestError, "Quote ownership could not be updated.");
+      setError(message);
+      showToast(message, "error");
+    } finally {
+      setQuoteAction("idle");
+    }
+  }
+
   function startBookingFromQuote(quoteRequest) {
     setBookingForm(quoteRequestToBookingForm(quoteRequest));
     setEditingBookingId("");
@@ -1189,8 +1298,11 @@ export default function Dashboard() {
           {activeTab === "quotes" && (
             <QuoteReviewPanel
               actionStatus={quoteAction}
+              currentUser={user}
               quoteRequests={quoteRequests}
+              users={users}
               onCreateBooking={startBookingFromQuote}
+              onOwnershipChange={updateQuoteOwnership}
               onPhotoRequest={sendQuotePhotoRequest}
               onStatusChange={updateQuoteRequestStatus}
             />
@@ -1199,6 +1311,7 @@ export default function Dashboard() {
             <BookingPanel
               actionStatus={bookingAction}
               bookings={bookings}
+              currentUser={user}
               deletedBookings={deletedBookings}
               editingBookingId={editingBookingId}
               employees={employees}
@@ -1206,6 +1319,7 @@ export default function Dashboard() {
               leads={leads}
               form={bookingForm}
               status={bookingStatus}
+              users={users}
               onCancelEdit={cancelBookingEdit}
               onChange={updateBookingForm}
               onDelete={deleteBooking}
@@ -1213,6 +1327,7 @@ export default function Dashboard() {
               onEdit={startEditingBooking}
               onCleanerBrief={sendBookingCleanerBrief}
               onEmailConfirmation={sendBookingEmailConfirmation}
+              onOwnershipChange={updateBookingOwnership}
               onPhoneConfirmation={markBookingPhoneConfirmed}
               onRestore={restoreBooking}
               onSubmit={createBooking}
@@ -1915,6 +2030,7 @@ function LeadTable({ leads, onStatusChange }) {
 function BookingPanel({
   actionStatus,
   bookings,
+  currentUser,
   deletedBookings,
   editingBookingId,
   employees,
@@ -1922,6 +2038,7 @@ function BookingPanel({
   leads,
   form,
   status,
+  users,
   onCancelEdit,
   onChange,
   onDelete,
@@ -1929,6 +2046,7 @@ function BookingPanel({
   onEdit,
   onCleanerBrief,
   onEmailConfirmation,
+  onOwnershipChange,
   onPhoneConfirmation,
   onRestore,
   onSubmit,
@@ -2027,6 +2145,7 @@ function BookingPanel({
         <SelectedDaySchedule
           actionStatus={actionStatus}
           bookings={normalizedSearch ? searchResults : selectedBookings}
+          currentUser={currentUser}
           employees={employees}
           emptyLabel={normalizedSearch ? "No bookings match that search." : "No bookings on this date."}
           selectedDate={selectedDate}
@@ -2036,8 +2155,10 @@ function BookingPanel({
           onEdit={onEdit}
           onCleanerBrief={onCleanerBrief}
           onEmailConfirmation={onEmailConfirmation}
+          onOwnershipChange={onOwnershipChange}
           onPhoneConfirmation={onPhoneConfirmation}
           onStatusChange={onStatusChange}
+          users={users}
         />
       </div>
       <BookingForm
@@ -2162,6 +2283,7 @@ function BookingCalendar({ bookingsByDate, days, selectedDate, visibleMonth, onM
 function SelectedDaySchedule({
   actionStatus,
   bookings,
+  currentUser,
   employees,
   emptyLabel = "No bookings on this date.",
   selectedDate,
@@ -2171,8 +2293,10 @@ function SelectedDaySchedule({
   onEdit,
   onCleanerBrief,
   onEmailConfirmation,
+  onOwnershipChange,
   onPhoneConfirmation,
-  onStatusChange
+  onStatusChange,
+  users = []
 }) {
   return (
     <section className="panel p-5">
@@ -2187,6 +2311,8 @@ function SelectedDaySchedule({
               : null;
           const assignedCleaners = bookingAssignedCleaners(booking, employees);
           const cleanerEmailCount = bookingCleanerEmails(booking, employees).length;
+          const ownedByMe = isOwnedByCurrentUser(booking, currentUser);
+          const ownedBySomeoneElse = isOwnedByAnotherUser(booking, currentUser);
 
           return (
             <article className="rounded-lg border border-stone-200 bg-white p-4" key={booking._id}>
@@ -2198,6 +2324,7 @@ function SelectedDaySchedule({
                       {bookingReference(booking)}
                     </span>
                     <StatusBadge value={booking.status} />
+                    <OwnershipBadge record={booking} users={users} />
                   </div>
                   <p className="mt-1 font-semibold text-stone-600">{booking.service}</p>
                 </div>
@@ -2227,6 +2354,12 @@ function SelectedDaySchedule({
                   {booking.communicationPreference || "email"}:{" "}
                   {latestLog ? `${latestLog.status} - ${latestLog.detail}` : "No update sent yet"}
                 </p>
+                <p className="font-semibold text-stone-500">
+                  Client thread: {communicationStatusLabel(booking.communicationStatus)}
+                  {booking.lastClientContactedAt
+                    ? ` - last contacted ${new Date(booking.lastClientContactedAt).toLocaleString("en-GB")}`
+                    : ""}
+                </p>
                 {assignedCleaners.length > 0 && (
                   <p className="font-semibold text-stone-500">
                     Cleaners: {assignedCleaners.map((employee) => employee.name || employee.email || employee._id).join(", ")}
@@ -2243,8 +2376,25 @@ function SelectedDaySchedule({
                 <button
                   className="button-secondary px-3 py-2"
                   type="button"
+                  onClick={() => onOwnershipChange(booking, ownedByMe ? "release" : "take")}
+                  disabled={actionStatus === `owner:${booking._id}`}
+                  title={ownedBySomeoneElse ? "Take over this client thread before emailing." : undefined}
+                >
+                  {actionStatus === `owner:${booking._id}` ? (
+                    <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+                  ) : ownedByMe ? (
+                    <X size={16} aria-hidden="true" />
+                  ) : (
+                    <UserPlus size={16} aria-hidden="true" />
+                  )}
+                  {ownedByMe ? "Release" : ownedBySomeoneElse ? "Take over" : "Take"}
+                </button>
+                <button
+                  className="button-secondary px-3 py-2"
+                  type="button"
                   onClick={() => onEmailConfirmation(booking._id)}
-                  disabled={actionStatus === `email:${booking._id}`}
+                  disabled={ownedBySomeoneElse || actionStatus === `email:${booking._id}`}
+                  title={ownedBySomeoneElse ? "Take over this booking before emailing the client." : undefined}
                 >
                   {actionStatus === `email:${booking._id}` ? (
                     <Loader2 className="animate-spin" size={16} aria-hidden="true" />
@@ -2271,7 +2421,8 @@ function SelectedDaySchedule({
                   className="button-secondary px-3 py-2"
                   type="button"
                   onClick={() => onPhoneConfirmation(booking._id)}
-                  disabled={!booking.phone || actionStatus === `phone:${booking._id}`}
+                  disabled={!booking.phone || ownedBySomeoneElse || actionStatus === `phone:${booking._id}`}
+                  title={ownedBySomeoneElse ? "Take over this booking before recording client phone contact." : undefined}
                 >
                   {actionStatus === `phone:${booking._id}` ? (
                     <Loader2 className="animate-spin" size={16} aria-hidden="true" />
@@ -2587,7 +2738,16 @@ function quoteStatusLabel(value = "") {
   return String(value || "").replace(/_/g, " ");
 }
 
-function QuoteReviewPanel({ actionStatus, quoteRequests, onCreateBooking, onPhotoRequest, onStatusChange }) {
+function QuoteReviewPanel({
+  actionStatus,
+  currentUser,
+  quoteRequests,
+  users,
+  onCreateBooking,
+  onOwnershipChange,
+  onPhotoRequest,
+  onStatusChange
+}) {
   const [activeQuoteFilter, setActiveQuoteFilter] = useState("active");
   const activeFilter = quoteFilterTabs.find((filter) => filter.key === activeQuoteFilter) || quoteFilterTabs[0];
   const visibleQuoteRequests = quoteRequests.filter((quoteRequest) => activeFilter.statuses.includes(quoteRequest.status));
@@ -2631,6 +2791,7 @@ function QuoteReviewPanel({ actionStatus, quoteRequests, onCreateBooking, onPhot
               <th className="px-4 py-3">Client</th>
               <th className="px-4 py-3">Quote</th>
               <th className="px-4 py-3">Scope</th>
+              <th className="px-4 py-3">Owner</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Action</th>
               <th className="px-4 py-3">Received</th>
@@ -2640,6 +2801,8 @@ function QuoteReviewPanel({ actionStatus, quoteRequests, onCreateBooking, onPhot
             {visibleQuoteRequests.map((quoteRequest) => {
               const quote = quoteRequest.quoteResult || {};
               const input = quoteRequest.quoteInput || {};
+              const ownedByMe = isOwnedByCurrentUser(quoteRequest, currentUser);
+              const ownedBySomeoneElse = isOwnedByAnotherUser(quoteRequest, currentUser);
 
               return (
                 <tr key={quoteRequest._id}>
@@ -2665,6 +2828,17 @@ function QuoteReviewPanel({ actionStatus, quoteRequests, onCreateBooking, onPhot
                     {quoteRequest.quoteNotes && <p className="mt-1">Notes: {quoteRequest.quoteNotes}</p>}
                   </td>
                   <td className="px-4 py-4">
+                    <OwnershipBadge record={quoteRequest} users={users} />
+                    <p className="mt-2 text-xs font-bold capitalize text-stone-500">
+                      {communicationStatusLabel(quoteRequest.communicationStatus)}
+                    </p>
+                    {quoteRequest.lastClientContactedAt && (
+                      <p className="mt-1 text-xs font-semibold text-stone-500">
+                        Last emailed {new Date(quoteRequest.lastClientContactedAt).toLocaleDateString("en-GB")}
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">
                     <select
                       className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-700"
                       value={quoteRequest.status}
@@ -2687,8 +2861,25 @@ function QuoteReviewPanel({ actionStatus, quoteRequests, onCreateBooking, onPhot
                       <button
                         className="button-secondary whitespace-nowrap px-3 py-2"
                         type="button"
+                        onClick={() => onOwnershipChange(quoteRequest, ownedByMe ? "release" : "take")}
+                        disabled={actionStatus === `owner:${quoteRequest._id}`}
+                        title={ownedBySomeoneElse ? "Take over this quote before emailing." : undefined}
+                      >
+                        {actionStatus === `owner:${quoteRequest._id}` ? (
+                          <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+                        ) : ownedByMe ? (
+                          <X size={16} aria-hidden="true" />
+                        ) : (
+                          <UserPlus size={16} aria-hidden="true" />
+                        )}
+                        {ownedByMe ? "Release" : ownedBySomeoneElse ? "Take over" : "Take"}
+                      </button>
+                      <button
+                        className="button-secondary whitespace-nowrap px-3 py-2"
+                        type="button"
                         onClick={() => onPhotoRequest(quoteRequest._id)}
-                        disabled={actionStatus === `photos:${quoteRequest._id}`}
+                        disabled={ownedBySomeoneElse || actionStatus === `photos:${quoteRequest._id}`}
+                        title={ownedBySomeoneElse ? "Take over this quote before emailing the client." : undefined}
                       >
                         {actionStatus === `photos:${quoteRequest._id}` ? (
                           <Loader2 className="animate-spin" size={16} aria-hidden="true" />
@@ -2707,7 +2898,7 @@ function QuoteReviewPanel({ actionStatus, quoteRequests, onCreateBooking, onPhot
                 </tr>
               );
             })}
-            {visibleQuoteRequests.length === 0 && <EmptyRow label={`No ${activeFilter.label.toLowerCase()} quote requests.`} columns={7} />}
+            {visibleQuoteRequests.length === 0 && <EmptyRow label={`No ${activeFilter.label.toLowerCase()} quote requests.`} columns={8} />}
           </tbody>
         </table>
       </div>
