@@ -3,7 +3,7 @@ import { useFileDatabase } from "../config/database.js";
 import Counter from "../models/Counter.js";
 import QuoteRequest from "../models/QuoteRequest.js";
 import { recordAuditEvent } from "../services/auditService.js";
-import { sendQuoteRequestNotification } from "../services/emailService.js";
+import { sendQuotePhotoRequestEmail, sendQuoteRequestNotification } from "../services/emailService.js";
 import * as fileStore from "../services/fileStore.js";
 import {
   addOnKeys,
@@ -58,6 +58,12 @@ export const updateQuoteRequestStatusSchema = z.object({
   }),
   body: z.object({
     status: z.enum(quoteStatuses)
+  })
+});
+
+export const quoteRequestIdSchema = z.object({
+  params: z.object({
+    id: z.string().min(1)
   })
 });
 
@@ -154,4 +160,48 @@ export const updateQuoteRequestStatus = asyncHandler(async (req, res) => {
   });
 
   return res.json({ quoteRequest });
+});
+
+export const sendQuotePhotoRequest = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const before = useFileDatabase() ? await fileStore.findQuoteRequestById(id) : await QuoteRequest.findById(id).lean();
+
+  if (!before) {
+    return res.status(404).json({ message: "Quote request not found." });
+  }
+
+  let photoRequestEmail;
+
+  try {
+    photoRequestEmail = await sendQuotePhotoRequestEmail(before);
+  } catch (error) {
+    console.error("Quote photo request email failed:", error);
+    return res.status(502).json({ message: "Photo request email could not be sent. Check email settings." });
+  }
+
+  if (!photoRequestEmail?.sent) {
+    return res.status(502).json({ message: photoRequestEmail?.reason || "Photo request email could not be sent." });
+  }
+
+  const updates = {
+    status: "awaiting_photos",
+    photoRequestSentAt: new Date()
+  };
+  const quoteRequest = useFileDatabase()
+    ? await fileStore.updateQuoteRequest(id, updates)
+    : await QuoteRequest.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+
+  await recordAuditEvent(req, {
+    action: "quote_request.photo_request_sent",
+    resource: "quoteRequest",
+    resourceId: quoteRequest._id,
+    summary: `Photo request email sent for quote ${quoteRequest.quoteReference}.`,
+    metadata: {
+      before: { status: before.status },
+      after: { status: quoteRequest.status, photoRequestSentAt: quoteRequest.photoRequestSentAt },
+      photoRequestEmail
+    }
+  });
+
+  return res.json({ quoteRequest, photoRequestEmail });
 });

@@ -73,6 +73,10 @@ const quoteRequestSchema = new mongoose.Schema(
     quoteResult: {
       type: mongoose.Schema.Types.Mixed,
       required: true
+    },
+    photoRequestSentAt: {
+      type: Date,
+      default: null
     }
   },
   { timestamps: true }

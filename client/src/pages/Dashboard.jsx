@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  CheckCircle2,
   Download,
   Edit3,
   FileText,
@@ -22,6 +23,7 @@ import {
   ShieldCheck,
   Star,
   Trash2,
+  TriangleAlert,
   UserPlus,
   UsersRound,
   X
@@ -329,6 +331,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("leads");
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState("");
+  const [toast, setToast] = useState(null);
   const [users, setUsers] = useState([]);
   const [leads, setLeads] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -340,6 +343,7 @@ export default function Dashboard() {
   const [googleReviews, setGoogleReviews] = useState([]);
   const [reviewsMeta, setReviewsMeta] = useState(null);
   const [auditEvents, setAuditEvents] = useState([]);
+  const [quoteAction, setQuoteAction] = useState("idle");
   const [bookingForm, setBookingForm] = useState(() => createInitialBookingForm());
   const [bookingStatus, setBookingStatus] = useState("idle");
   const [bookingAction, setBookingAction] = useState("idle");
@@ -359,6 +363,14 @@ export default function Dashboard() {
   const [employeeStatus, setEmployeeStatus] = useState("idle");
 
   const isAdmin = user?.role === "admin";
+
+  function showToast(message, type = "success") {
+    const id = Date.now();
+    setToast({ id, message, type });
+    window.setTimeout(() => {
+      setToast((current) => (current?.id === id ? null : current));
+    }, 4200);
+  }
 
   async function loadBookingRecords({ keepBooking } = {}) {
     const cacheBuster = Date.now();
@@ -574,9 +586,12 @@ export default function Dashboard() {
       setBookingStatus("success");
       await loadBookingRecords({ keepBooking: data.booking });
       await loadAuditEvents();
+      showToast(editingBookingId ? "Booking updated." : "Booking saved to the calendar.");
     } catch (requestError) {
       setBookingStatus("error");
-      setError(getApiError(requestError, editingBookingId ? "Booking could not be updated." : "Booking could not be created."));
+      const message = getApiError(requestError, editingBookingId ? "Booking could not be updated." : "Booking could not be created.");
+      setError(message);
+      showToast(message, "error");
     }
   }
 
@@ -601,10 +616,13 @@ export default function Dashboard() {
 
       setDeletedBookings((current) => [deletedBooking, ...current.filter((booking) => booking._id !== bookingId)]);
       await Promise.allSettled([loadBookingRecords(), loadAuditEvents()]);
+      showToast("Booking moved to Recently deleted.");
     } catch (requestError) {
       setBookings(previous);
       setDeletedBookings(previousDeleted);
-      setError(getApiError(requestError, "Booking could not be deleted."));
+      const message = getApiError(requestError, "Booking could not be deleted.");
+      setError(message);
+      showToast(message, "error");
     } finally {
       setBookingAction("idle");
     }
@@ -645,10 +663,13 @@ export default function Dashboard() {
       );
       setDeletedBookings((current) => current.filter((booking) => booking._id !== bookingId));
       await Promise.allSettled([loadBookingRecords(), loadAuditEvents()]);
+      showToast("Booking restored to the calendar.");
     } catch (requestError) {
       setBookings(previous);
       setDeletedBookings(previousDeleted);
-      setError(getApiError(requestError, "Booking could not be restored."));
+      const message = getApiError(requestError, "Booking could not be restored.");
+      setError(message);
+      showToast(message, "error");
     } finally {
       setBookingAction("idle");
     }
@@ -667,9 +688,12 @@ export default function Dashboard() {
       });
       setBookings((current) => current.map((booking) => (booking._id === bookingId ? data.booking : booking)));
       await loadAuditEvents();
+      showToast(`Booking status updated to ${nextStatus}.`);
     } catch (requestError) {
       setBookings(previous);
-      setError(getApiError(requestError, "Booking status could not be updated."));
+      const message = getApiError(requestError, "Booking status could not be updated.");
+      setError(message);
+      showToast(message, "error");
     }
   }
 
@@ -681,8 +705,11 @@ export default function Dashboard() {
       const { data } = await apiClient.post(`/bookings/${bookingId}/email-confirmation`);
       setBookings((current) => current.map((booking) => (booking._id === bookingId ? data.booking : booking)));
       await loadAuditEvents();
+      showToast("Client confirmation email sent.");
     } catch (requestError) {
-      setError(getApiError(requestError, "Email confirmation could not be sent."));
+      const message = getApiError(requestError, "Email confirmation could not be sent.");
+      setError(message);
+      showToast(message, "error");
     } finally {
       setBookingAction("idle");
     }
@@ -696,8 +723,11 @@ export default function Dashboard() {
       const { data } = await apiClient.post(`/bookings/${bookingId}/cleaner-brief`);
       setBookings((current) => current.map((booking) => (booking._id === bookingId ? data.booking : booking)));
       await Promise.allSettled([loadBookingRecords(), loadAuditEvents()]);
+      showToast("Cleaner job brief email sent.");
     } catch (requestError) {
-      setError(getApiError(requestError, "Cleaner job brief could not be sent."));
+      const message = getApiError(requestError, "Cleaner job brief could not be sent.");
+      setError(message);
+      showToast(message, "error");
     } finally {
       setBookingAction("idle");
     }
@@ -713,8 +743,11 @@ export default function Dashboard() {
       });
       setBookings((current) => current.map((booking) => (booking._id === bookingId ? data.booking : booking)));
       await loadAuditEvents();
+      showToast("Phone confirmation recorded.");
     } catch (requestError) {
-      setError(getApiError(requestError, "Phone confirmation could not be recorded."));
+      const message = getApiError(requestError, "Phone confirmation could not be recorded.");
+      setError(message);
+      showToast(message, "error");
     } finally {
       setBookingAction("idle");
     }
@@ -1045,9 +1078,32 @@ export default function Dashboard() {
         current.map((quoteRequest) => (quoteRequest._id === quoteRequestId ? data.quoteRequest : quoteRequest))
       );
       await loadAuditEvents();
+      showToast(`Quote ${data.quoteRequest.quoteReference} moved to ${quoteStatusLabel(nextStatus)}.`);
     } catch (requestError) {
       setQuoteRequests(previous);
-      setError(getApiError(requestError, "Quote request could not be updated."));
+      const message = getApiError(requestError, "Quote request could not be updated.");
+      setError(message);
+      showToast(message, "error");
+    }
+  }
+
+  async function sendQuotePhotoRequest(quoteRequestId) {
+    setError("");
+    setQuoteAction(`photos:${quoteRequestId}`);
+
+    try {
+      const { data } = await apiClient.post(`/quote/requests/${quoteRequestId}/photo-request`);
+      setQuoteRequests((current) =>
+        current.map((quoteRequest) => (quoteRequest._id === quoteRequestId ? data.quoteRequest : quoteRequest))
+      );
+      await loadAuditEvents();
+      showToast(`Photo request email sent to ${data.quoteRequest.clientName}.`);
+    } catch (requestError) {
+      const message = getApiError(requestError, "Photo request email could not be sent.");
+      setError(message);
+      showToast(message, "error");
+    } finally {
+      setQuoteAction("idle");
     }
   }
 
@@ -1095,6 +1151,8 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {toast && <ActionToast toast={toast} onDismiss={() => setToast(null)} />}
+
       {error && <div className="mt-6 rounded-lg bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</div>}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9">
@@ -1130,8 +1188,10 @@ export default function Dashboard() {
           {activeTab === "leads" && <LeadTable leads={leads} onStatusChange={updateLeadStatus} />}
           {activeTab === "quotes" && (
             <QuoteReviewPanel
+              actionStatus={quoteAction}
               quoteRequests={quoteRequests}
               onCreateBooking={startBookingFromQuote}
+              onPhotoRequest={sendQuotePhotoRequest}
               onStatusChange={updateQuoteRequestStatus}
             />
           )}
@@ -2527,25 +2587,7 @@ function quoteStatusLabel(value = "") {
   return String(value || "").replace(/_/g, " ");
 }
 
-function buildPhotoRequestMailto(quoteRequest) {
-  const subject = `[${quoteRequest.quoteReference}] Velura quote - photos requested`;
-  const body = [
-    `Hello ${quoteRequest.clientName},`,
-    "",
-    `Thank you for your Velura quote request ${quoteRequest.quoteReference}.`,
-    "",
-    "To confirm the final price and scope, could you please reply with photos or a short video of the areas you would like cleaned?",
-    "",
-    "Helpful photos include kitchens, bathrooms, flooring/carpets, any heavy build-up, access points, and parking if relevant.",
-    "",
-    "Kind regards,",
-    "Velura"
-  ].join("\n");
-
-  return `mailto:${quoteRequest.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
-
-function QuoteReviewPanel({ quoteRequests, onCreateBooking, onStatusChange }) {
+function QuoteReviewPanel({ actionStatus, quoteRequests, onCreateBooking, onPhotoRequest, onStatusChange }) {
   const [activeQuoteFilter, setActiveQuoteFilter] = useState("active");
   const activeFilter = quoteFilterTabs.find((filter) => filter.key === activeQuoteFilter) || quoteFilterTabs[0];
   const visibleQuoteRequests = quoteRequests.filter((quoteRequest) => activeFilter.statuses.includes(quoteRequest.status));
@@ -2634,13 +2676,27 @@ function QuoteReviewPanel({ quoteRequests, onCreateBooking, onStatusChange }) {
                         </option>
                       ))}
                     </select>
+                    {quoteRequest.photoRequestSentAt && (
+                      <p className="mt-2 text-xs font-bold text-stone-500">
+                        Photos requested {new Date(quoteRequest.photoRequestSentAt).toLocaleDateString("en-GB")}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-wrap gap-2">
-                      <a className="button-secondary whitespace-nowrap px-3 py-2" href={buildPhotoRequestMailto(quoteRequest)}>
-                        <Mail size={16} aria-hidden="true" />
+                      <button
+                        className="button-secondary whitespace-nowrap px-3 py-2"
+                        type="button"
+                        onClick={() => onPhotoRequest(quoteRequest._id)}
+                        disabled={actionStatus === `photos:${quoteRequest._id}`}
+                      >
+                        {actionStatus === `photos:${quoteRequest._id}` ? (
+                          <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+                        ) : (
+                          <Mail size={16} aria-hidden="true" />
+                        )}
                         Ask photos
-                      </a>
+                      </button>
                       <button className="button-secondary whitespace-nowrap px-3 py-2" type="button" onClick={() => onCreateBooking(quoteRequest)}>
                         <CalendarCheck size={16} aria-hidden="true" />
                         Create booking
@@ -2863,5 +2919,27 @@ function EmptyRow({ label, columns }) {
         {label}
       </td>
     </tr>
+  );
+}
+
+function ActionToast({ toast, onDismiss }) {
+  const isError = toast.type === "error";
+  const Icon = isError ? TriangleAlert : CheckCircle2;
+
+  return (
+    <div className="fixed right-4 top-4 z-50 w-[min(92vw,360px)] rounded-lg border border-stone-200 bg-white p-4 shadow-soft">
+      <div className="flex items-start gap-3">
+        <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${isError ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>
+          <Icon size={19} aria-hidden="true" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-extrabold text-coal">{isError ? "Action failed" : "Action complete"}</p>
+          <p className="mt-1 text-sm font-semibold leading-5 text-stone-600">{toast.message}</p>
+        </div>
+        <button className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-stone-500 hover:bg-mist hover:text-coal" type="button" onClick={onDismiss} aria-label="Dismiss notification">
+          <X size={16} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
   );
 }

@@ -275,6 +275,7 @@ export async function createQuoteRequest(payload) {
       status: payload.status || "new",
       quoteInput: payload.quoteInput,
       quoteResult: payload.quoteResult,
+      photoRequestSentAt: payload.photoRequestSentAt || null,
       createdAt: timestamp,
       updatedAt: timestamp
     };

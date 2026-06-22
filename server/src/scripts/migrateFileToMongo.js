@@ -162,6 +162,7 @@ async function main() {
         status: quoteRequest.status || "new",
         quoteInput: quoteRequest.quoteInput,
         quoteResult: quoteRequest.quoteResult,
+        photoRequestSentAt: quoteRequest.photoRequestSentAt ? asDate(quoteRequest.photoRequestSentAt) : null,
         createdAt: asDate(quoteRequest.createdAt),
         updatedAt: asDate(quoteRequest.updatedAt)
       }

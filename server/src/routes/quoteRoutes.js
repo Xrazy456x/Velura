@@ -4,6 +4,8 @@ import {
   getPricing,
   getQuote,
   listQuoteRequests,
+  quoteRequestIdSchema,
+  sendQuotePhotoRequest,
   submitQuoteRequest,
   submitQuoteRequestSchema,
   updateQuoteRequestStatus,
@@ -17,6 +19,7 @@ const router = Router();
 router.post("/calculate", validate(calculateQuoteSchema), getQuote);
 router.post("/requests", validate(submitQuoteRequestSchema), submitQuoteRequest);
 router.get("/requests", requireAuth, requireRole("admin"), listQuoteRequests);
+router.post("/requests/:id/photo-request", requireAuth, requireRole("admin"), validate(quoteRequestIdSchema), sendQuotePhotoRequest);
 router.patch("/requests/:id/status", requireAuth, requireRole("admin"), validate(updateQuoteRequestStatusSchema), updateQuoteRequestStatus);
 router.get("/pricing", requireAuth, requireRole("admin"), getPricing);
 

@@ -325,6 +325,56 @@ export async function sendQuoteRequestNotification(quoteRequest) {
   });
 }
 
+export async function sendQuotePhotoRequestEmail(quoteRequest) {
+  if (!isEmailConfigured()) {
+    console.info("Email provider is not configured. Skipping quote photo request email.");
+    return { sent: false, reason: "Email provider not configured" };
+  }
+
+  const reference = quoteRequest.quoteReference || "VQ-REQUEST";
+  const quote = quoteRequest.quoteResult || {};
+  const lines = [
+    `Hello ${quoteRequest.clientName},`,
+    `Thank you for your Velura Services quote request ${reference}.`,
+    "To confirm the scope and guide estimate properly, could you please reply with clear photos or a short video of the areas you would like cleaned?",
+    "Helpful photos include kitchens, bathrooms, flooring or carpets, any heavy build-up, access points, and parking if relevant.",
+    "Once we have reviewed everything, we will come back to you with the confirmed scope and price."
+  ];
+  const detailRows = [
+    { label: "Quote reference", value: reference },
+    { label: "Service", value: quote.serviceLabel },
+    { label: "Property", value: quote.propertyLabel },
+    { label: "Guide estimate", value: quote.displayPrice },
+    { label: "Preferred date", value: quoteRequest.preferredDate },
+    { label: "Preferred time", value: quoteRequest.preferredTime },
+    { label: "Address", value: quoteRequest.address }
+  ];
+  const textLines = [
+    ...lines,
+    "",
+    ...detailRows.filter((row) => row.value).map((row) => `${row.label}: ${row.value}`),
+    "",
+    `Please reply directly to this email with the photos. Your reply will go to ${env.smtp.contactTo}.`,
+    "",
+    "Velura Services",
+    "Luxury cleaning, gently delivered"
+  ];
+
+  return sendEmail({
+    to: quoteRequest.email,
+    replyTo: env.smtp.contactTo,
+    subject: `[${reference}] Photos requested for your Velura Services quote`,
+    text: textLines.join("\n"),
+    html: buildEmailHtml("Photos requested for your quote", lines, {
+      eyebrow: "Quote review",
+      referenceLabel: "Quote reference",
+      referenceValue: reference,
+      detailRows,
+      replyNote: `Please reply directly to this email with the photos. Your reply will go to ${env.smtp.contactTo}.`
+    })
+  });
+}
+
 async function sendSms({ to, body }) {
   if (!to) {
     return { sent: false, reason: "Client phone number is missing" };
