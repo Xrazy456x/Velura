@@ -579,7 +579,7 @@ export function calculateQuote(payload) {
     displayPrice: formatRange(range.min, range.max),
     estimatedDurationHours: Math.max(1, Math.round(duration * 2) / 2),
     needsInspection: false,
-    caveat: "Final price can change after access, parking, property condition, and full scope are confirmed.",
+    caveat: "This is a guide estimate. The confirmed price may change after photos, access, parking, property condition, and full scope are reviewed.",
     breakdown
   };
 }
@@ -686,7 +686,7 @@ export function getPricingMatrix() {
       "Average condition adds 15%; heavy build-up adds 35%.",
       "Extra bathrooms over two add £30 each.",
       "Same-day or urgent scheduling adds 20%.",
-      "Parking, congestion charges, very large properties, and unusual access can change the final price."
+      "Parking, congestion charges, very large properties, and unusual access can change the confirmed price."
     ],
     inspectionItems
   };

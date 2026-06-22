@@ -623,27 +623,27 @@ export default function Quote() {
             </div>
           </form>
 
-          <aside className="panel h-fit p-5 shadow-lift lg:sticky lg:top-24">
+          <aside className="panel h-fit p-5 shadow-lift lg:sticky lg:top-24 lg:min-h-[720px]">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="eyebrow">Live estimate</p>
-                <h2 className="mt-1 text-2xl font-extrabold text-coal">{selectedService.title}</h2>
+                <h2 className="mt-1 min-h-16 text-2xl font-extrabold leading-tight text-coal">{selectedService.title}</h2>
               </div>
               <img className="h-12 w-12 rounded-lg object-contain" src={site.mark} alt="" />
             </div>
             <QuoteResult compact quote={quote} status={status} error={error} />
-            <div className="mt-5 grid gap-3 rounded-lg bg-mist p-4 text-sm font-semibold text-stone-600">
-              <p className="flex items-center gap-2">
-                <CalendarCheck size={16} className="text-coral" aria-hidden="true" />
-                {form.preferredDate || "No date selected"} {form.preferredTime || ""}
+            <div className="mt-5 grid min-h-[150px] gap-3 rounded-lg bg-mist p-4 text-sm font-semibold text-stone-600">
+              <p className="flex min-h-8 items-center gap-2">
+                <CalendarCheck size={16} className="shrink-0 text-coral" aria-hidden="true" />
+                <span className="truncate">{form.preferredDate || "No date selected"} {form.preferredTime || ""}</span>
               </p>
-              <p className="flex items-center gap-2">
-                <MapPin size={16} className="text-coral" aria-hidden="true" />
-                {form.address || "Address not added"}
+              <p className="flex min-h-8 items-center gap-2">
+                <MapPin size={16} className="shrink-0 text-coral" aria-hidden="true" />
+                <span className="truncate">{form.address || "Address not added"}</span>
               </p>
-              <p className="flex items-center gap-2">
-                <KeyRound size={16} className="text-coral" aria-hidden="true" />
-                {form.accessInstructions ? "Access instructions added" : "Access instructions not added"}
+              <p className="flex min-h-8 items-center gap-2">
+                <KeyRound size={16} className="shrink-0 text-coral" aria-hidden="true" />
+                <span className="truncate">{form.accessInstructions ? "Access instructions added" : "Access instructions not added"}</span>
               </p>
             </div>
           </aside>
@@ -685,16 +685,23 @@ function QuantitySelect({ label, onChange, value }) {
 }
 
 function QuoteResult({ compact = false, error, quote, status }) {
-  if (status === "loading") {
+  if (status === "loading" && !quote) {
     return (
-      <div className="mt-5 flex items-center gap-3 rounded-lg bg-mist p-4 text-sm font-bold text-stone-600">
-        <Loader2 className="animate-spin text-coral" size={18} aria-hidden="true" />
-        Calculating
+      <div className="mt-5">
+        <div className="grid min-h-[178px] place-items-center rounded-lg bg-coal p-5 text-white">
+          <div className="flex items-center gap-3 text-sm font-bold text-stone-200">
+            <Loader2 className="animate-spin text-gold" size={18} aria-hidden="true" />
+            Calculating estimate
+          </div>
+        </div>
+        <p className="mt-4 min-h-12 text-xs font-semibold leading-5 text-stone-500">
+          This is a guide estimate. The confirmed price may change after photos, access, parking, property condition, and full scope are reviewed.
+        </p>
       </div>
     );
   }
 
-  if (status === "error") {
+  if (status === "error" && !quote) {
     return <div className="mt-5 rounded-lg bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>;
   }
 
@@ -703,12 +710,20 @@ function QuoteResult({ compact = false, error, quote, status }) {
   }
 
   return (
-    <div className="mt-5">
-      <div className="rounded-lg bg-coal p-5 text-white">
-        <p className="text-sm font-bold text-stone-300">{quote.propertyLabel}</p>
-        <p className="mt-2 text-4xl font-extrabold leading-tight text-gold">{quote.displayPrice}</p>
+    <div className={compact ? "mt-5 min-h-[296px]" : "mt-5"}>
+      <div className="relative min-h-[178px] rounded-lg bg-coal p-5 text-white">
+        {status === "loading" && (
+          <div className="absolute right-4 top-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-extrabold text-stone-200">
+            <Loader2 className="animate-spin text-gold" size={13} aria-hidden="true" />
+            Updating
+          </div>
+        )}
+        <p className="min-h-6 pr-28 text-sm font-bold text-stone-300">{quote.propertyLabel}</p>
+        <p className="mt-2 min-h-[3.25rem] text-4xl font-extrabold leading-tight text-gold tabular-nums">{quote.displayPrice}</p>
         {quote.estimatedDurationHours && (
-          <p className="mt-2 text-sm font-semibold text-stone-200">Estimated duration: {quote.estimatedDurationHours} hours</p>
+          <p className="mt-2 min-h-6 text-sm font-semibold text-stone-200">
+            Estimated duration: <span className="tabular-nums">{quote.estimatedDurationHours}</span> hours
+          </p>
         )}
       </div>
 
@@ -732,7 +747,7 @@ function QuoteResult({ compact = false, error, quote, status }) {
         )
       )}
 
-      <p className="mt-4 text-xs font-semibold leading-5 text-stone-500">{quote.caveat}</p>
+      <p className="mt-4 min-h-12 text-xs font-semibold leading-5 text-stone-500">{quote.caveat}</p>
     </div>
   );
 }
