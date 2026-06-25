@@ -8,6 +8,10 @@ function normalizeEmailFrom(value) {
   return sender.replace(/^"?Velura"?\s*</i, "Velura Services <");
 }
 
+function cleanOptionalEnv(value) {
+  return value ? value.trim() : value;
+}
+
 const requiredInProduction = ["MONGO_URI", "JWT_SECRET"];
 
 if (process.env.NODE_ENV === "production") {
@@ -53,8 +57,8 @@ export const env = {
     fromNumber: process.env.TWILIO_FROM_NUMBER
   },
   google: {
-    placesApiKey: process.env.GOOGLE_PLACES_API_KEY,
-    placeId: process.env.GOOGLE_PLACE_ID,
+    placesApiKey: cleanOptionalEnv(process.env.GOOGLE_PLACES_API_KEY),
+    placeId: cleanOptionalEnv(process.env.GOOGLE_PLACE_ID),
     reviewsCacheTtlMinutes: Number(process.env.GOOGLE_REVIEWS_CACHE_TTL_MINUTES || 720)
   },
   auditLogRetentionDays: Number(process.env.AUDIT_LOG_RETENTION_DAYS || 2190)

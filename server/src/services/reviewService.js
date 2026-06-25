@@ -5,6 +5,21 @@ import * as fileStore from "./fileStore.js";
 
 const FIELD_MASK = "id,displayName,rating,userRatingCount,reviews";
 
+function getGoogleConfigDiagnostics() {
+  const key = env.google.placesApiKey || "";
+
+  return {
+    placeId: env.google.placeId || null,
+    placeIdLength: env.google.placeId?.length || 0,
+    apiKeyPresent: Boolean(key),
+    apiKeyLength: key.length,
+    apiKeyPrefix: key ? key.slice(0, 6) : null,
+    apiKeySuffix: key ? key.slice(-4) : null,
+    apiKeyContainsWhitespace: /\s/.test(key),
+    cacheTtlMinutes: env.google.reviewsCacheTtlMinutes
+  };
+}
+
 function getCacheCutoff() {
   return new Date(Date.now() - env.google.reviewsCacheTtlMinutes * 60 * 1000);
 }
@@ -68,7 +83,28 @@ export async function getReviews({ forceRefresh = false } = {}) {
     return readCachedReviews(placeId);
   }
 
-  return fetchAndCacheReviews();
+  try {
+    return await fetchAndCacheReviews();
+  } catch (error) {
+    console.warn("Google reviews refresh failed", {
+      ...getGoogleConfigDiagnostics(),
+      statusCode: error.statusCode,
+      googleStatusCode: error.googleStatusCode,
+      message: error.message
+    });
+
+    const cached = await readCachedReviews(placeId);
+
+    return {
+      ...cached,
+      meta: {
+        ...cached.meta,
+        source: "cache",
+        refreshError: "Google reviews are temporarily unavailable.",
+        refreshStatusCode: error.googleStatusCode || error.statusCode || 500
+      }
+    };
+  }
 }
 
 export async function fetchAndCacheReviews() {
@@ -90,6 +126,7 @@ export async function fetchAndCacheReviews() {
     const detail = await response.text();
     const error = new Error(`Google Places request failed with status ${response.status}: ${detail}`);
     error.statusCode = 502;
+    error.googleStatusCode = response.status;
     throw error;
   }
 
