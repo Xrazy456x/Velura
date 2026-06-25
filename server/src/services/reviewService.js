@@ -114,8 +114,12 @@ export async function fetchAndCacheReviews() {
     return readCachedReviews(placeId);
   }
 
-  const response = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+  const url = new URL(`https://places.googleapis.com/v1/places/${placeId}`);
+  url.searchParams.set("key", placesApiKey);
+
+  const response = await fetch(url, {
     headers: {
+      Accept: "application/json",
       "Content-Type": "application/json",
       "X-Goog-Api-Key": placesApiKey,
       "X-Goog-FieldMask": FIELD_MASK
