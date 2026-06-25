@@ -4,7 +4,7 @@ import Review from "../models/Review.js";
 import * as fileStore from "./fileStore.js";
 
 const FIELD_MASK = "id,displayName,rating,userRatingCount,reviews";
-const PROFILE_FIELD_MASK = "id,displayName,rating,userRatingCount,googleMapsUri";
+const PROFILE_FIELD_MASK = "id,displayName";
 const LEGACY_FIELDS = "name,rating,user_ratings_total,reviews,url";
 
 function getGoogleConfigDiagnostics() {
@@ -238,12 +238,13 @@ async function fetchPlaceProfileFromPlacesNew(originalError) {
   }
 
   const url = new URL(`https://places.googleapis.com/v1/places/${placeId}`);
-  url.searchParams.set("fields", PROFILE_FIELD_MASK);
-  url.searchParams.set("key", placesApiKey);
 
   const response = await fetch(url, {
     headers: {
-      Accept: "application/json"
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": placesApiKey,
+      "X-Goog-FieldMask": PROFILE_FIELD_MASK
     }
   });
 
@@ -262,9 +263,6 @@ async function fetchPlaceProfileFromPlacesNew(originalError) {
       ...cached.meta,
       source: "google-profile",
       placeName: place.displayName?.text,
-      averageRating: place.rating,
-      userRatingCount: place.userRatingCount,
-      googleMapsUri: place.googleMapsUri,
       fetchedAt,
       refreshNotice: "Google profile connected. Public review comments are not available from Google yet.",
       refreshStatusCode: originalError.googleStatusCode || originalError.statusCode
