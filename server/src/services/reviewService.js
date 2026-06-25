@@ -4,6 +4,7 @@ import Review from "../models/Review.js";
 import * as fileStore from "./fileStore.js";
 
 const FIELD_MASK = "id,displayName,rating,userRatingCount,reviews";
+const PROFILE_FIELD_MASK = "id,displayName,rating,userRatingCount,googleMapsUri";
 const LEGACY_FIELDS = "name,rating,user_ratings_total,reviews,url";
 
 function getGoogleConfigDiagnostics() {
@@ -156,7 +157,18 @@ export async function fetchAndCacheReviews() {
       message: error.message
     });
 
-    return fetchAndCacheReviewsFromLegacyPlaces();
+    try {
+      return await fetchPlaceProfileFromPlacesNew(error);
+    } catch (profileError) {
+      console.warn("Google Places New profile request failed, trying legacy Place Details", {
+        ...getGoogleConfigDiagnostics(),
+        statusCode: profileError.statusCode,
+        googleStatusCode: profileError.googleStatusCode,
+        message: profileError.message
+      });
+
+      return fetchAndCacheReviewsFromLegacyPlaces();
+    }
   }
 }
 
@@ -214,6 +226,48 @@ async function fetchAndCacheReviewsFromPlacesNew() {
       averageRating: place.rating,
       userRatingCount: place.userRatingCount,
       fetchedAt
+    }
+  };
+}
+
+async function fetchPlaceProfileFromPlacesNew(originalError) {
+  const { placeId, placesApiKey } = env.google;
+
+  if (!placeId || !placesApiKey) {
+    return readCachedReviews(placeId);
+  }
+
+  const url = new URL(`https://places.googleapis.com/v1/places/${placeId}`);
+  url.searchParams.set("fields", PROFILE_FIELD_MASK);
+  url.searchParams.set("key", placesApiKey);
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json"
+    }
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw createGoogleError("Google Places New profile", response, detail);
+  }
+
+  const place = await response.json();
+  const fetchedAt = new Date();
+  const cached = await readCachedReviews(placeId);
+
+  return {
+    ...cached,
+    meta: {
+      ...cached.meta,
+      source: "google-profile",
+      placeName: place.displayName?.text,
+      averageRating: place.rating,
+      userRatingCount: place.userRatingCount,
+      googleMapsUri: place.googleMapsUri,
+      fetchedAt,
+      refreshNotice: "Google profile connected. Public review comments are not available from Google yet.",
+      refreshStatusCode: originalError.googleStatusCode || originalError.statusCode
     }
   };
 }
