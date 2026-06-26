@@ -22,14 +22,31 @@ if (process.env.NODE_ENV === "production") {
   }
 }
 
+function getClientUrls() {
+  const configured = process.env.CLIENT_URLS || process.env.CLIENT_URL;
+  const fallback = process.env.NODE_ENV === "production" ? "http://localhost:5173" : "http://localhost:5173,http://localhost:5174,http://localhost:5175";
+
+  const urls = (configured || fallback)
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean);
+
+  if (process.env.NODE_ENV !== "production") {
+    for (const localUrl of ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"]) {
+      if (!urls.includes(localUrl)) {
+        urls.push(localUrl);
+      }
+    }
+  }
+
+  return urls;
+}
+
 export const env = {
   nodeEnv: process.env.NODE_ENV || "development",
   port: Number(process.env.PORT || 5001),
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
-  clientUrls: (process.env.CLIENT_URLS || process.env.CLIENT_URL || "http://localhost:5173")
-    .split(",")
-    .map((url) => url.trim())
-    .filter(Boolean),
+  clientUrls: getClientUrls(),
   databaseDriver: process.env.DATABASE_DRIVER || "mongodb",
   databaseFallbackToFile: process.env.DATABASE_FALLBACK_TO_FILE !== "false",
   mongoUri: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/velura_crm",
@@ -59,7 +76,13 @@ export const env = {
   google: {
     placesApiKey: cleanOptionalEnv(process.env.GOOGLE_PLACES_API_KEY),
     placeId: cleanOptionalEnv(process.env.GOOGLE_PLACE_ID),
-    reviewsCacheTtlMinutes: Number(process.env.GOOGLE_REVIEWS_CACHE_TTL_MINUTES || 720)
+    reviewsCacheTtlMinutes: Number(process.env.GOOGLE_REVIEWS_CACHE_TTL_MINUTES || 720),
+    businessProfile: {
+      clientId: cleanOptionalEnv(process.env.GOOGLE_BUSINESS_CLIENT_ID),
+      clientSecret: cleanOptionalEnv(process.env.GOOGLE_BUSINESS_CLIENT_SECRET),
+      redirectUri: cleanOptionalEnv(process.env.GOOGLE_BUSINESS_REDIRECT_URI),
+      tokenSecret: cleanOptionalEnv(process.env.GOOGLE_BUSINESS_TOKEN_SECRET)
+    }
   },
   auditLogRetentionDays: Number(process.env.AUDIT_LOG_RETENTION_DAYS || 2190)
 };

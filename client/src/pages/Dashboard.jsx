@@ -398,6 +398,7 @@ export default function Dashboard() {
   const [quoteRequests, setQuoteRequests] = useState([]);
   const [googleReviews, setGoogleReviews] = useState([]);
   const [reviewsMeta, setReviewsMeta] = useState(null);
+  const [googleBusinessStatus, setGoogleBusinessStatus] = useState(null);
   const [auditEvents, setAuditEvents] = useState([]);
   const [governance, setGovernance] = useState(null);
   const [quoteAction, setQuoteAction] = useState("idle");
@@ -428,6 +429,26 @@ export default function Dashboard() {
       setToast((current) => (current?.id === id ? null : current));
     }, 4200);
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    const googleReviewsStatus = params.get("googleReviews");
+
+    if (tabs.some((item) => item.key === tab)) {
+      setActiveTab(tab);
+    }
+
+    if (googleReviewsStatus === "connected") {
+      showToast("Google Business Profile connected. Reviews can now sync into MongoDB.");
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+
+    if (googleReviewsStatus === "error") {
+      showToast("Google Business Profile connection was cancelled or failed.", "error");
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
 
   async function loadBookingRecords({ keepBooking } = {}) {
     const cacheBuster = Date.now();
@@ -470,6 +491,12 @@ export default function Dashboard() {
     setEmployees(data.employees || []);
   }
 
+  async function loadGoogleBusinessConnection() {
+    const { data } = await apiClient.get("/reviews/business/status");
+    setGoogleBusinessStatus(data);
+    return data;
+  }
+
   async function loadDashboard() {
     setStatus("loading");
     setError("");
@@ -490,6 +517,7 @@ export default function Dashboard() {
         pricingResponse,
         quoteRequestsResponse,
         reviewsResponse,
+        googleBusinessResponse,
         auditResponse,
         governanceResponse
       ] = await Promise.all([
@@ -502,6 +530,7 @@ export default function Dashboard() {
         apiClient.get("/quote/pricing"),
         apiClient.get("/quote/requests"),
         apiClient.get("/reviews"),
+        apiClient.get("/reviews/business/status"),
         apiClient.get("/audit?limit=100"),
         apiClient.get("/governance")
       ]);
@@ -516,6 +545,7 @@ export default function Dashboard() {
       setQuoteRequests(quoteRequestsResponse.data.quoteRequests || []);
       setGoogleReviews(reviewsResponse.data.reviews || []);
       setReviewsMeta(reviewsResponse.data.meta || null);
+      setGoogleBusinessStatus(googleBusinessResponse.data || null);
       setAuditEvents(auditResponse.data.auditEvents || []);
       setGovernance(governanceResponse.data.governance || null);
       setStatus("ready");
@@ -957,8 +987,39 @@ export default function Dashboard() {
       const { data } = await apiClient.post("/reviews/refresh");
       setGoogleReviews(data.reviews || []);
       setReviewsMeta(data.meta || null);
+      await loadGoogleBusinessConnection();
+      showToast("Google reviews refreshed.");
     } catch (requestError) {
-      setError(getApiError(requestError, "Google reviews could not be refreshed. Check the Places API key and Place ID."));
+      setError(getApiError(requestError, "Google reviews could not be synced. Check the Business Profile connection and enabled Google APIs."));
+    } finally {
+      setReviewAction("idle");
+    }
+  }
+
+  async function connectGoogleBusinessReviews() {
+    setError("");
+    setReviewAction("connecting");
+
+    try {
+      const returnTo = `${window.location.origin}/dashboard?tab=reviews`;
+      const { data } = await apiClient.get("/reviews/business/start", { params: { returnTo } });
+      window.location.assign(data.authUrl);
+    } catch (requestError) {
+      setError(getApiError(requestError, "Google Business Profile connection could not be started."));
+      setReviewAction("idle");
+    }
+  }
+
+  async function disconnectGoogleBusinessReviews() {
+    setError("");
+    setReviewAction("disconnecting");
+
+    try {
+      await apiClient.delete("/reviews/business");
+      await loadGoogleBusinessConnection();
+      showToast("Google Business Profile disconnected.");
+    } catch (requestError) {
+      setError(getApiError(requestError, "Google Business Profile could not be disconnected."));
     } finally {
       setReviewAction("idle");
     }
@@ -1368,7 +1429,15 @@ export default function Dashboard() {
           )}
           {activeTab === "pricing" && <PricingPanel pricing={pricing} />}
           {activeTab === "reviews" && (
-            <ReviewsPanel meta={reviewsMeta} reviews={googleReviews} status={reviewAction} onRefresh={refreshGoogleReviews} />
+            <ReviewsPanel
+              businessStatus={googleBusinessStatus}
+              meta={reviewsMeta}
+              reviews={googleReviews}
+              status={reviewAction}
+              onConnect={connectGoogleBusinessReviews}
+              onDisconnect={disconnectGoogleBusinessReviews}
+              onRefresh={refreshGoogleReviews}
+            />
           )}
           {activeTab === "users" && (
             <div className="grid gap-6">
@@ -1905,9 +1974,14 @@ function PricingPanel({ pricing }) {
   );
 }
 
-function ReviewsPanel({ meta, reviews, status, onRefresh }) {
+function ReviewsPanel({ businessStatus, meta, reviews, status, onConnect, onDisconnect, onRefresh }) {
   const configured = Boolean(meta?.configured);
+  const businessConfigured = Boolean(businessStatus?.configured);
+  const businessConnected = Boolean(businessStatus?.connected);
+  const connection = businessStatus?.connection;
   const fetchedLabel = meta?.fetchedAt ? new Date(meta.fetchedAt).toLocaleString("en-GB") : "Not refreshed yet";
+  const ratingValue = connection?.averageRating ?? meta?.averageRating;
+  const reviewCountValue = connection?.totalReviewCount ?? meta?.userRatingCount;
 
   return (
     <div className="grid gap-6">
@@ -1917,40 +1991,69 @@ function ReviewsPanel({ meta, reviews, status, onRefresh }) {
             <p className="eyebrow">Google Reviews</p>
             <h2 className="mt-1 text-2xl font-extrabold text-coal">Review connection</h2>
             <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-stone-500">
-              Add the Google Places API key and Place ID in Render, then refresh here to cache the latest available reviews in MongoDB.
+              Connect Velura's verified Google Business Profile, then sync reviews into MongoDB for the public website and manager portal.
             </p>
           </div>
-          <button className="button-primary" type="button" onClick={onRefresh} disabled={status === "refreshing" || !configured}>
-            {status === "refreshing" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
-            Refresh reviews
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {!businessConnected && (
+              <button className="button-primary" type="button" onClick={onConnect} disabled={status === "connecting" || !businessConfigured}>
+                {status === "connecting" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <KeyRound size={18} aria-hidden="true" />}
+                Connect Google
+              </button>
+            )}
+            <button className="button-secondary" type="button" onClick={onRefresh} disabled={status === "refreshing" || (!configured && !businessConnected)}>
+              {status === "refreshing" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
+              Sync reviews
+            </button>
+            {businessConnected && (
+              <button className="button-secondary" type="button" onClick={onDisconnect} disabled={status === "disconnecting"}>
+                {status === "disconnecting" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <X size={18} aria-hidden="true" />}
+                Disconnect
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mt-5 grid gap-4 md:grid-cols-4">
           <div className="rounded-lg border border-stone-200 bg-mist p-4">
             <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-stone-500">Status</p>
-            <p className="mt-2 text-lg font-extrabold text-coal">{configured ? "Connected" : "Not connected"}</p>
+            <p className="mt-2 text-lg font-extrabold text-coal">
+              {businessConnected ? "Business Profile" : configured ? "Places fallback" : "Not connected"}
+            </p>
           </div>
           <div className="rounded-lg border border-stone-200 bg-mist p-4">
             <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-stone-500">Rating</p>
             <p className="mt-2 text-lg font-extrabold text-coal">
-              {meta?.averageRating ? Number(meta.averageRating).toFixed(1) : "N/A"}
+              {ratingValue ? Number(ratingValue).toFixed(1) : "N/A"}
             </p>
           </div>
           <div className="rounded-lg border border-stone-200 bg-mist p-4">
             <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-stone-500">Review count</p>
-            <p className="mt-2 text-lg font-extrabold text-coal">{meta?.userRatingCount || "N/A"}</p>
+            <p className="mt-2 text-lg font-extrabold text-coal">{reviewCountValue ?? "N/A"}</p>
           </div>
           <div className="rounded-lg border border-stone-200 bg-mist p-4">
             <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-stone-500">Last cached</p>
-            <p className="mt-2 text-sm font-extrabold text-coal">{fetchedLabel}</p>
+            <p className="mt-2 text-sm font-extrabold text-coal">
+              {connection?.lastSyncedAt ? new Date(connection.lastSyncedAt).toLocaleString("en-GB") : fetchedLabel}
+            </p>
           </div>
         </div>
 
-        {!configured && (
+        {businessConnected && (
+          <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900">
+            Connected to {connection?.locationTitle || "Velura's Google Business Profile"}. Reviews are cached in MongoDB after each sync.
+          </div>
+        )}
+
+        {!businessConfigured && (
           <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800">
-            Add `GOOGLE_PLACES_API_KEY` and `GOOGLE_PLACE_ID` to Render, then redeploy the API. Use only the Place ID value, not the full
-            `places/...` path.
+            Add `GOOGLE_BUSINESS_CLIENT_ID` and `GOOGLE_BUSINESS_CLIENT_SECRET` to Render, then redeploy the API before connecting.
+          </div>
+        )}
+
+        {connection?.lastSyncError && (
+          <div className="mt-5 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm font-semibold leading-6 text-rose-800">
+            Last sync error: {connection.lastSyncError}
           </div>
         )}
       </section>

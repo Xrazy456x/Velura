@@ -1,5 +1,6 @@
 import { useFileDatabase } from "../config/database.js";
 import { env } from "../config/env.js";
+import GoogleBusinessConnection from "../models/GoogleBusinessConnection.js";
 import Review from "../models/Review.js";
 import * as fileStore from "./fileStore.js";
 
@@ -40,24 +41,39 @@ function toPublicReview(review) {
   };
 }
 
-async function readCachedReviews(placeId = env.google.placeId) {
-  if (!placeId) {
-    return { reviews: [], meta: { configured: false, source: "empty" } };
+export async function readCachedReviews(placeId = env.google.placeId) {
+  let reviewPlaceId = placeId;
+  const businessConnection = useFileDatabase()
+    ? null
+    : await GoogleBusinessConnection.findOne({ provider: "google_business_profile" });
+
+  if (!reviewPlaceId) {
+    reviewPlaceId = businessConnection?.placeId || businessConnection?.locationName;
+  }
+
+  if (!reviewPlaceId) {
+    return {
+      reviews: [],
+      meta: {
+        configured: Boolean(reviewPlaceId),
+        source: "empty"
+      }
+    };
   }
 
   const reviews = useFileDatabase()
-    ? await fileStore.listReviews(placeId)
-    : await Review.find({ placeId }).sort({ publishTime: -1, createdAt: -1 }).limit(5);
+    ? await fileStore.listReviews(reviewPlaceId)
+    : await Review.find({ placeId: reviewPlaceId }).sort({ publishTime: -1, createdAt: -1 }).limit(5);
   const latest = reviews[0];
 
   return {
     reviews: reviews.map(toPublicReview),
     meta: {
-      configured: Boolean(env.google.placesApiKey && env.google.placeId),
+      configured: Boolean((env.google.placesApiKey && env.google.placeId) || businessConnection),
       source: "cache",
-      averageRating: latest?.averageRating,
-      userRatingCount: latest?.userRatingCount,
-      fetchedAt: latest?.fetchedAt
+      averageRating: latest?.averageRating ?? businessConnection?.averageRating,
+      userRatingCount: latest?.userRatingCount ?? businessConnection?.totalReviewCount,
+      fetchedAt: latest?.fetchedAt ?? businessConnection?.lastSyncedAt
     }
   };
 }
@@ -70,7 +86,7 @@ function shouldRefresh(latest) {
   return new Date(latest.fetchedAt) < getCacheCutoff();
 }
 
-async function cacheReviewRecords(records) {
+export async function cacheReviewRecords(records) {
   if (records.length === 0) {
     return;
   }
