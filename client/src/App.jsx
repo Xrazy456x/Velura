@@ -3,7 +3,6 @@ import Layout from "./components/Layout.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import About from "./pages/About.jsx";
 import Contact from "./pages/Contact.jsx";
-import ComingSoon from "./pages/ComingSoon.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
@@ -17,65 +16,15 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<ComingSoon />} />
+        <Route index element={<Home />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/services" element={<Services />} />
+        <Route path="/quote" element={<Quote />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Navigate to="/login" replace />} />
-        <Route
-          path="/portal"
-          element={
-            <ProtectedRoute>
-              <Home />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/portal/about"
-          element={
-            <ProtectedRoute>
-              <About />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/portal/services"
-          element={
-            <ProtectedRoute>
-              <Services />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/portal/quote"
-          element={
-            <ProtectedRoute>
-              <Quote />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/portal/contact"
-          element={
-            <ProtectedRoute>
-              <Contact />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/portal/privacy"
-          element={
-            <ProtectedRoute>
-              <Privacy />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/portal/terms"
-          element={
-            <ProtectedRoute>
-              <Terms />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="/dashboard"
           element={
@@ -84,13 +33,14 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/home" element={<Navigate to="/portal" replace />} />
-        <Route path="/about" element={<Navigate to="/portal/about" replace />} />
-        <Route path="/services" element={<Navigate to="/portal/services" replace />} />
-        <Route path="/quote" element={<Navigate to="/portal/quote" replace />} />
-        <Route path="/contact" element={<Navigate to="/portal/contact" replace />} />
-        <Route path="/privacy" element={<Navigate to="/portal/privacy" replace />} />
-        <Route path="/terms" element={<Navigate to="/portal/terms" replace />} />
+        <Route path="/home" element={<Navigate to="/" replace />} />
+        <Route path="/portal" element={<Navigate to="/" replace />} />
+        <Route path="/portal/about" element={<Navigate to="/about" replace />} />
+        <Route path="/portal/services" element={<Navigate to="/services" replace />} />
+        <Route path="/portal/quote" element={<Navigate to="/quote" replace />} />
+        <Route path="/portal/contact" element={<Navigate to="/contact" replace />} />
+        <Route path="/portal/privacy" element={<Navigate to="/privacy" replace />} />
+        <Route path="/portal/terms" element={<Navigate to="/terms" replace />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

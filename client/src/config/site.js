@@ -27,11 +27,11 @@ export const site = {
     { label: "Repeat clients", value: "91%" }
   ],
   nav: [
-    { label: "Home", href: "/portal" },
-    { label: "About", href: "/portal/about" },
-    { label: "Services", href: "/portal/services" },
-    { label: "Quote", href: "/portal/quote" },
-    { label: "Contact", href: "/portal/contact" }
+    { label: "Home", href: "/" },
+    { label: "About", href: "/about" },
+    { label: "Services", href: "/services" },
+    { label: "Quote", href: "/quote" },
+    { label: "Contact", href: "/contact" }
   ],
   services: [
     {
@@ -81,7 +81,7 @@ export const site = {
     { title: "Request", description: "Clients send an inquiry with property details and preferred service.", icon: MailCheck },
     { title: "Prepare", description: "Admins qualify the inquiry and confirm scope, access, and timing.", icon: Clock3 },
     { title: "Care", description: "The clean follows a repeatable checklist with room-by-room attention.", icon: Sparkles },
-    { title: "Follow up", description: "Email replies, status updates, and Google reviews keep quality visible.", icon: LineChart }
+    { title: "Follow up", description: "Email replies, status updates, and quality notes keep each client journey visible.", icon: LineChart }
   ],
   plans: [
     {

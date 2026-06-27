@@ -25,7 +25,7 @@ export default function Login() {
 
     try {
       await login(form);
-      navigate(location.state?.from?.pathname || "/portal", { replace: true });
+      navigate(location.state?.from?.pathname || "/dashboard", { replace: true });
     } catch (requestError) {
       setError(getApiError(requestError, "Login failed."));
       setStatus("error");
@@ -34,7 +34,7 @@ export default function Login() {
 
   return (
     <>
-      <PageHeader eyebrow="Velura Portal" title="Welcome back." description="Access the private Velura website and manager tools." />
+      <PageHeader eyebrow="Velura Portal" title="Welcome back." description="Access private manager tools for bookings, quotes, accounts, and operations." />
       <section className="bg-mist">
         <div className="section-shell flex justify-center py-14 sm:py-18">
           <form className="panel grid w-full max-w-lg gap-4 p-6" onSubmit={handleSubmit}>

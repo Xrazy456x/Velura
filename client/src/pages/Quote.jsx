@@ -238,7 +238,7 @@ export default function Quote() {
       ...current,
       serviceType,
       propertyType: isWorkspaceService(serviceType) ? "flat" : current.propertyType,
-      urgency: serviceType === "emergency" ? "same_day" : current.urgency,
+      urgency: "standard",
       addOns: current.addOns.filter((key) => nextAddOns.some((addOn) => addOn.key === key))
     }));
   }
@@ -532,7 +532,7 @@ export default function Quote() {
                       className="input-field"
                       value={form.address}
                       onChange={(event) => updateField("address", event.target.value)}
-                      placeholder="Full address or area, for example Canary Wharf, London"
+                      placeholder="Full address or area, for example Canary Wharf, Richmond, Surrey, or Hertfordshire"
                     />
                   </label>
                   <label className="grid gap-2 text-sm font-bold text-coal">

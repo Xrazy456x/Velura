@@ -1,8 +1,57 @@
 import { motion } from "framer-motion";
-import { ArrowRight, BadgeCheck, ChevronRight, ClipboardList, LineChart, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  BadgeCheck,
+  CalendarCheck,
+  ChevronRight,
+  ClipboardList,
+  KeyRound,
+  LineChart,
+  MessageSquareText,
+  ShieldCheck,
+  Sparkles
+} from "lucide-react";
 import { Link } from "react-router-dom";
-import ReviewCarousel from "../components/ReviewCarousel.jsx";
 import { site } from "../config/site.js";
+
+const serviceIndex = [
+  {
+    number: "01",
+    title: "Private homes",
+    description: "Quiet weekly, fortnightly, and deep residential care for spaces that need a composed finish.",
+    meta: "Regular / Deep"
+  },
+  {
+    number: "02",
+    title: "Tenancy handovers",
+    description: "Checklist-led move-in and move-out cleaning with notes for access, parking, add-ons, and condition.",
+    meta: "EOT / HMO"
+  },
+  {
+    number: "03",
+    title: "Commercial spaces",
+    description: "Office, studio, salon, and shared-area cleaning shaped around timing, touchpoints, and presentation.",
+    meta: "Office / Retail"
+  }
+];
+
+const workflowHighlights = [
+  {
+    icon: MessageSquareText,
+    title: "One clear client thread",
+    body: "Quotes, photo requests, ownership, and booking notes sit in one operational view."
+  },
+  {
+    icon: CalendarCheck,
+    title: "Diary before delivery",
+    body: "Bookings carry reference numbers, cleaner assignments, access notes, and parking detail."
+  },
+  {
+    icon: KeyRound,
+    title: "Access handled carefully",
+    body: "Managers can keep important property instructions visible before the cleaner arrives."
+  }
+];
 
 export default function Home() {
   return (
@@ -13,66 +62,112 @@ export default function Home() {
           src={site.heroImage}
           alt="Bright luxury living room prepared for a professional clean"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-coal/95 via-coal/72 to-coal/20" aria-hidden="true" />
-        <div className="absolute inset-0 bg-gradient-to-t from-coal/45 via-transparent to-white/5" aria-hidden="true" />
-        <div className="section-shell relative flex min-h-[76vh] items-center py-16 sm:py-20">
+        <div className="absolute inset-0 bg-gradient-to-r from-coal/95 via-coal/76 to-coal/32" aria-hidden="true" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(222,192,111,0.18),transparent_35%,rgba(119,133,110,0.22))]" aria-hidden="true" />
+        <div className="section-shell relative grid min-h-[82vh] items-center gap-10 py-16 sm:py-20 lg:grid-cols-[1.05fr_0.95fr]">
           <motion.div
             className="max-w-3xl"
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: "easeOut" }}
           >
-            <img className="mb-6 w-64 max-w-full drop-shadow-[0_18px_45px_rgba(0,0,0,0.45)] sm:w-80" src={site.logo} alt="Velura logo" />
-            <p className="inline-flex rounded-full border border-coral/45 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-coral">
-              {site.tagline}
-            </p>
-            <h1 className="mt-6 text-5xl font-extrabold uppercase leading-[1.02] tracking-[0.16em] sm:text-6xl lg:text-7xl">
-              {site.name}
+            <div className="flex flex-wrap items-center gap-3">
+              <img className="w-56 max-w-full drop-shadow-[0_18px_45px_rgba(0,0,0,0.45)] sm:w-72" src={site.logo} alt="Velura logo" />
+              <span className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-stone-100 backdrop-blur">
+                London-led, available beyond
+              </span>
+            </div>
+            <p className="mt-8 inline-flex text-xs font-bold uppercase tracking-[0.16em] text-coral">{site.tagline}</p>
+            <h1 className="mt-5 max-w-4xl text-4xl font-extrabold leading-[1.02] text-white sm:text-6xl lg:text-7xl">
+              Calm, detailed cleaning for homes and commercial spaces.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-100 drop-shadow sm:text-xl">
-              A refined cleaning company for homes, apartments, offices, and short-stay spaces that deserve a calm,
-              careful, beautifully finished clean.
+              A refined cleaning service for London and surrounding areas, with flexibility for selected work further
+              afield when the scope is right.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link className="button-primary bg-white text-coal hover:bg-stone-100" to="/portal/quote">
+              <Link className="button-primary bg-white text-coal hover:bg-stone-100" to="/quote">
                 Instant quote
                 <ArrowRight size={18} aria-hidden="true" />
               </Link>
-              <Link className="button-secondary border-white/35 bg-white/10 text-white hover:bg-white hover:text-coal" to="/portal/services">
+              <Link className="button-secondary border-white/35 bg-white/10 text-white hover:bg-white hover:text-coal" to="/services">
                 Explore services
                 <ChevronRight size={18} aria-hidden="true" />
               </Link>
             </div>
             <div className="mt-10 grid max-w-2xl grid-cols-3 gap-3">
               {site.stats.map((item) => (
-                <div key={item.label} className="rounded-lg border border-white/15 bg-white/10 p-3 backdrop-blur">
+                <div key={item.label} className="border-t border-white/25 pt-3">
                   <p className="text-2xl font-extrabold">{item.value}</p>
                   <p className="mt-1 text-xs font-semibold text-stone-200">{item.label}</p>
                 </div>
               ))}
             </div>
           </motion.div>
+
+          <div className="hidden lg:block">
+            <div className="overflow-hidden rounded-2xl border border-white/20 bg-white/10 p-5 shadow-lift backdrop-blur-xl">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.22, duration: 0.9, ease: "easeOut" }}>
+                <div className="flex items-center justify-between gap-5 border-b border-white/15 pb-5">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-coral">Velura operating standard</p>
+                    <p className="mt-2 text-2xl font-extrabold">Scope before shine.</p>
+                  </div>
+                  <Sparkles className="text-gold" size={28} aria-hidden="true" />
+                </div>
+                <div className="divide-y divide-white/15">
+                  {workflowHighlights.map((item) => (
+                    <div key={item.title} className="grid grid-cols-[auto_1fr] gap-4 py-5">
+                      <div className="grid h-11 w-11 place-items-center rounded-xl border border-white/20 bg-coal/35 text-coral">
+                        <item.icon size={20} aria-hidden="true" />
+                      </div>
+                      <div>
+                        <p className="text-lg font-extrabold">{item.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-stone-200">{item.body}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="bg-mist">
-        <div className="section-shell grid gap-4 py-12 md:grid-cols-4">
-          {site.process.map((item, index) => (
-            <motion.article
-              key={item.title}
-              className="panel p-5"
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              transition={{ delay: index * 0.06 }}
-            >
-              <div className="grid h-11 w-11 place-items-center rounded-lg bg-mist text-coral">
-                <item.icon size={21} aria-hidden="true" />
-              </div>
-              <h2 className="mt-5 text-lg font-extrabold text-coal">{item.title}</h2>
-              <p className="mt-2 text-sm leading-6 text-stone-600">{item.description}</p>
-            </motion.article>
-          ))}
+      <section className="overflow-hidden bg-mist">
+        <div className="border-y border-stone-200 bg-white/60 py-4">
+          <div className="section-shell flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-center text-xs font-bold uppercase tracking-[0.16em] text-stone-500">
+            {["Residential", "End of tenancy", "Office care", "Commercial", "Airbnb turnover", "After builders"].map((item) => (
+              <span key={item}>{item}</span>
+            ))}
+          </div>
+        </div>
+        <div className="section-shell py-14 sm:py-18">
+          <div className="max-w-3xl">
+            <p className="eyebrow">Service index</p>
+            <h2 className="mt-3 text-3xl font-extrabold leading-tight text-coal sm:text-5xl">
+              Every clean starts with the right kind of brief.
+            </h2>
+          </div>
+          <div className="mt-10 border-y border-stone-200">
+            {serviceIndex.map((item, index) => (
+              <motion.article
+                key={item.title}
+                className="group grid gap-4 border-b border-stone-200 py-6 last:border-b-0 md:grid-cols-[72px_1fr] lg:grid-cols-[90px_minmax(280px,0.85fr)_minmax(460px,1.25fr)_220px] lg:items-start"
+                initial={{ opacity: 0, y: 14 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.24 }}
+                transition={{ delay: index * 0.05 }}
+              >
+                <p className="text-sm font-extrabold text-coral">{item.number}</p>
+                <h3 className="text-3xl font-extrabold text-coal transition group-hover:text-berry">{item.title}</h3>
+                <p className="max-w-2xl text-sm leading-6 text-stone-600 sm:text-base">{item.description}</p>
+                <span className="w-fit rounded-full border border-coral/30 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-berry lg:justify-self-end">
+                  {item.meta}
+                </span>
+              </motion.article>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -84,21 +179,21 @@ export default function Home() {
               Premium cleaning with quiet operational discipline.
             </h2>
             <p className="mt-5 text-base leading-7 text-stone-600">
-              Velura presents as calm and luxurious to customers, while the dashboard keeps inquiries, client
-              quote reviews, job status, users, and Google reviews organised behind the scenes.
+              Velura presents calmly to customers while the manager portal keeps quote reviews, bookings, assigned
+              cleaners, invoices, client communication, and quality notes in one reliable workflow.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Link className="button-primary" to="/portal/quote">
+              <Link className="button-primary" to="/quote">
                 Get an instant quote
                 <ClipboardList size={18} aria-hidden="true" />
               </Link>
-              <Link className="button-secondary" to="/portal/about">
+              <Link className="button-secondary" to="/about">
                 Meet the system
               </Link>
             </div>
           </div>
 
-          <div className="panel overflow-hidden">
+          <div className="overflow-hidden border border-stone-200 bg-mist shadow-soft">
             <div className="border-b border-stone-200 bg-coal px-5 py-4 text-white">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -146,7 +241,40 @@ export default function Home() {
         </div>
       </section>
 
-      <ReviewCarousel />
+      <section className="bg-coal text-white">
+        <div className="section-shell grid gap-8 py-14 sm:py-18 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+          <div className="lg:sticky lg:top-24">
+            <p className="eyebrow text-gold">Method</p>
+            <h2 className="mt-3 text-3xl font-extrabold leading-tight sm:text-5xl">The clean is only one part of the service.</h2>
+            <p className="mt-5 text-base leading-7 text-stone-300">
+              The strongest premium service is felt before the team arrives: expectations are clear, access is known,
+              the cleaner understands the property, and the client knows what happens next.
+            </p>
+          </div>
+          <div className="divide-y divide-white/15 border-y border-white/15">
+            {site.process.map((item, index) => (
+              <motion.article
+                key={item.title}
+                className="grid gap-5 py-7 sm:grid-cols-[auto_1fr]"
+                initial={{ opacity: 0, y: 18 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.25 }}
+                transition={{ delay: index * 0.05 }}
+              >
+                <span className="text-sm font-extrabold text-coral">{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <item.icon className="text-gold" size={21} aria-hidden="true" />
+                    <h3 className="text-2xl font-extrabold">{item.title}</h3>
+                  </div>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-300 sm:text-base">{item.description}</p>
+                </div>
+              </motion.article>
+            ))}
+          </div>
+        </div>
+      </section>
+
     </>
   );
 }

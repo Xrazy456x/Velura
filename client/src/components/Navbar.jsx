@@ -17,7 +17,7 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-mist/90 backdrop-blur-xl">
       <nav className="section-shell flex h-16 items-center justify-between gap-3">
-        <Link to={isAuthenticated ? "/portal" : "/"} className="flex items-center gap-3" onClick={() => setIsOpen(false)}>
+        <Link to="/" className="flex items-center gap-3" onClick={() => setIsOpen(false)}>
           <span className="grid h-11 w-11 place-items-center overflow-hidden rounded-lg bg-coal ring-1 ring-coral/25">
             <img className="h-10 w-10 object-contain" src={site.mark} alt="" />
           </span>
@@ -30,12 +30,11 @@ export default function Navbar() {
         </Link>
 
         <div className="hidden items-center gap-1 lg:flex">
-          {isAuthenticated &&
-            site.nav.map((item) => (
-              <NavLink key={item.href} to={item.href} className={linkClass}>
-                {item.label}
-              </NavLink>
-            ))}
+          {site.nav.map((item) => (
+            <NavLink key={item.href} to={item.href} end={item.href === "/"} className={linkClass}>
+              {item.label}
+            </NavLink>
+          ))}
         </div>
 
         <div className="hidden items-center gap-2 lg:flex">
@@ -76,12 +75,11 @@ export default function Navbar() {
       {isOpen && (
         <div className="border-t border-stone-200 bg-white lg:hidden">
           <div className="section-shell flex flex-col gap-2 py-4">
-            {isAuthenticated &&
-              site.nav.map((item) => (
-                <NavLink key={item.href} to={item.href} className={linkClass} onClick={() => setIsOpen(false)}>
-                  {item.label}
-                </NavLink>
-              ))}
+            {site.nav.map((item) => (
+              <NavLink key={item.href} to={item.href} end={item.href === "/"} className={linkClass} onClick={() => setIsOpen(false)}>
+                {item.label}
+              </NavLink>
+            ))}
             <div className="mt-2 grid grid-cols-2 gap-2">
               {isAuthenticated ? (
                 <>
