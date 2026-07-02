@@ -14,9 +14,10 @@ import {
   Sparkles,
   UsersRound
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { apiClient, getApiError } from "../api/client.js";
 import { site } from "../config/site.js";
+import { calculateQuote } from "../../../shared/pricingService.js";
 
 const steps = ["Service", "Property", "Add-ons", "Schedule", "Access", "Quote", "Details", "Confirm"];
 
@@ -169,9 +170,8 @@ function bedroomsLabel(value, workspaceMode) {
 export default function Quote() {
   const [activeStep, setActiveStep] = useState(0);
   const [form, setForm] = useState(initialForm);
-  const [quote, setQuote] = useState(null);
-  const [status, setStatus] = useState("loading");
-  const [error, setError] = useState("");
+  const status = "ready";
+  const error = "";
   const [quoteSubmitStatus, setQuoteSubmitStatus] = useState("idle");
   const [quoteSubmitError, setQuoteSubmitError] = useState("");
   const [submittedReference, setSubmittedReference] = useState("");
@@ -196,31 +196,7 @@ export default function Quote() {
     [form, workspaceMode]
   );
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(async () => {
-      setStatus("loading");
-      setError("");
-
-      try {
-        const { data } = await apiClient.post("/quote/calculate", payload, { signal: controller.signal });
-        setQuote(data.quote);
-        setStatus("ready");
-      } catch (requestError) {
-        if (requestError.name === "CanceledError") {
-          return;
-        }
-
-        setError(getApiError(requestError, "The quote calculator could not load."));
-        setStatus("error");
-      }
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [payload]);
+  const quote = useMemo(() => calculateQuote(payload), [payload]);
 
   function updateField(name, value) {
     setQuoteSubmitStatus("idle");

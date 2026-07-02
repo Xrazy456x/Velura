@@ -497,6 +497,32 @@ export default function Dashboard() {
     return data;
   }
 
+  async function loadDashboardSecondaryData() {
+    const [reviewsResult, googleBusinessResult, auditResult, governanceResult] = await Promise.allSettled([
+      apiClient.get("/reviews"),
+      apiClient.get("/reviews/business/status"),
+      apiClient.get("/audit?limit=100"),
+      apiClient.get("/governance")
+    ]);
+
+    if (reviewsResult.status === "fulfilled") {
+      setGoogleReviews(reviewsResult.value.data.reviews || []);
+      setReviewsMeta(reviewsResult.value.data.meta || null);
+    }
+
+    if (googleBusinessResult.status === "fulfilled") {
+      setGoogleBusinessStatus(googleBusinessResult.value.data || null);
+    }
+
+    if (auditResult.status === "fulfilled") {
+      setAuditEvents(auditResult.value.data.auditEvents || []);
+    }
+
+    if (governanceResult.status === "fulfilled") {
+      setGovernance(governanceResult.value.data.governance || null);
+    }
+  }
+
   async function loadDashboard() {
     setStatus("loading");
     setError("");
@@ -515,11 +541,7 @@ export default function Dashboard() {
         invoicesResponse,
         employeesResponse,
         pricingResponse,
-        quoteRequestsResponse,
-        reviewsResponse,
-        googleBusinessResponse,
-        auditResponse,
-        governanceResponse
+        quoteRequestsResponse
       ] = await Promise.all([
         apiClient.get("/users"),
         apiClient.get("/leads"),
@@ -528,11 +550,7 @@ export default function Dashboard() {
         apiClient.get("/invoices"),
         apiClient.get("/employees"),
         apiClient.get("/quote/pricing"),
-        apiClient.get("/quote/requests"),
-        apiClient.get("/reviews"),
-        apiClient.get("/reviews/business/status"),
-        apiClient.get("/audit?limit=100"),
-        apiClient.get("/governance")
+        apiClient.get("/quote/requests")
       ]);
 
       setUsers(usersResponse.data.users || []);
@@ -543,12 +561,8 @@ export default function Dashboard() {
       setEmployees(employeesResponse.data.employees || []);
       setPricing(pricingResponse.data.pricing || null);
       setQuoteRequests(quoteRequestsResponse.data.quoteRequests || []);
-      setGoogleReviews(reviewsResponse.data.reviews || []);
-      setReviewsMeta(reviewsResponse.data.meta || null);
-      setGoogleBusinessStatus(googleBusinessResponse.data || null);
-      setAuditEvents(auditResponse.data.auditEvents || []);
-      setGovernance(governanceResponse.data.governance || null);
       setStatus("ready");
+      void loadDashboardSecondaryData();
     } catch (requestError) {
       setError(getApiError(requestError, "Dashboard data could not be loaded."));
       setStatus("error");
