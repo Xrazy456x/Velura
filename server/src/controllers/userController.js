@@ -47,8 +47,8 @@ export const listUsers = asyncHandler(async (req, res) => {
     return res.json({ users });
   }
 
-  const users = await User.find().sort({ createdAt: -1 });
-  return res.json({ users: users.map((user) => user.toSafeObject()) });
+  const users = await User.find().select("-passwordHash").sort({ createdAt: -1 }).lean();
+  return res.json({ users });
 });
 
 export const createUser = asyncHandler(async (req, res) => {

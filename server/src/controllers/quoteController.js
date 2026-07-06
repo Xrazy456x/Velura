@@ -217,7 +217,8 @@ export const listQuoteRequests = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(200)
     .populate("assignedManager", "name email")
-    .populate("lastClientContactedBy", "name email");
+    .populate("lastClientContactedBy", "name email")
+    .lean();
   return res.json({ quoteRequests });
 });
 

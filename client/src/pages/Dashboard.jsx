@@ -35,9 +35,9 @@ import StatCard from "../components/StatCard.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 
 const tabs = [
-  { key: "leads", label: "Inquiries" },
-  { key: "quotes", label: "Quote review" },
   { key: "bookings", label: "Bookings" },
+  { key: "quotes", label: "Quote review" },
+  { key: "leads", label: "Enquiries" },
   { key: "invoices", label: "Invoices" },
   { key: "employees", label: "Employees" },
   { key: "pricing", label: "Pricing" },
@@ -384,8 +384,9 @@ function OwnershipBadge({ record, users = [] }) {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("leads");
-  const [status, setStatus] = useState("loading");
+  const [activeTab, setActiveTab] = useState("bookings");
+  const [status, setStatus] = useState("ready");
+  const [recordsStatus, setRecordsStatus] = useState("idle");
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
   const [users, setUsers] = useState([]);
@@ -524,48 +525,39 @@ export default function Dashboard() {
   }
 
   async function loadDashboard() {
-    setStatus("loading");
+    setStatus("ready");
+    setRecordsStatus("loading");
     setError("");
 
     try {
       if (!isAdmin) {
         setStatus("ready");
+        setRecordsStatus("idle");
         return;
       }
 
-      const [
-        usersResponse,
-        leadsResponse,
-        bookingsResponse,
-        deletedBookingsResponse,
-        invoicesResponse,
-        employeesResponse,
-        pricingResponse,
-        quoteRequestsResponse
-      ] = await Promise.all([
-        apiClient.get("/users"),
-        apiClient.get("/leads"),
-        apiClient.get("/bookings"),
-        apiClient.get("/bookings/deleted"),
-        apiClient.get("/invoices"),
-        apiClient.get("/employees"),
-        apiClient.get("/quote/pricing"),
-        apiClient.get("/quote/requests")
+      const results = await Promise.allSettled([
+        apiClient.get("/bookings").then((response) => setBookings(response.data.bookings || [])),
+        apiClient.get("/quote/requests").then((response) => setQuoteRequests(response.data.quoteRequests || [])),
+        apiClient.get("/employees").then((response) => setEmployees(response.data.employees || [])),
+        apiClient.get("/users").then((response) => setUsers(response.data.users || [])),
+        apiClient.get("/leads").then((response) => setLeads(response.data.leads || [])),
+        apiClient.get("/bookings/deleted").then((response) => setDeletedBookings(response.data.bookings || [])),
+        apiClient.get("/invoices").then((response) => setInvoices(response.data.invoices || [])),
+        apiClient.get("/quote/pricing").then((response) => setPricing(response.data.pricing || null))
       ]);
 
-      setUsers(usersResponse.data.users || []);
-      setLeads(leadsResponse.data.leads || []);
-      setBookings(bookingsResponse.data.bookings || []);
-      setDeletedBookings(deletedBookingsResponse.data.bookings || []);
-      setInvoices(invoicesResponse.data.invoices || []);
-      setEmployees(employeesResponse.data.employees || []);
-      setPricing(pricingResponse.data.pricing || null);
-      setQuoteRequests(quoteRequestsResponse.data.quoteRequests || []);
+      if (results.some((result) => result.status === "rejected")) {
+        setError("Some manager records could not be loaded. Use Refresh if anything looks missing.");
+      }
+
       setStatus("ready");
       void loadDashboardSecondaryData();
     } catch (requestError) {
       setError(getApiError(requestError, "Dashboard data could not be loaded."));
       setStatus("error");
+    } finally {
+      setRecordsStatus("ready");
     }
   }
 
@@ -1334,8 +1326,8 @@ export default function Dashboard() {
           <h1 className="mt-3 text-4xl font-extrabold text-coal">Dashboard</h1>
           <p className="mt-3 text-stone-600">Manage inquiries, quote reviews, bookings, cleaners, account access, and review signals.</p>
         </div>
-        <button className="button-secondary" onClick={loadDashboard} type="button" disabled={status === "loading"}>
-          {status === "loading" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
+        <button className="button-secondary" onClick={loadDashboard} type="button" disabled={recordsStatus === "loading"}>
+          {recordsStatus === "loading" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
           Refresh
         </button>
       </div>
@@ -1343,6 +1335,13 @@ export default function Dashboard() {
       {toast && <ActionToast toast={toast} onDismiss={() => setToast(null)} />}
 
       {error && <div className="mt-6 rounded-lg bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</div>}
+
+      {recordsStatus === "loading" && (
+        <div className="mt-6 inline-flex items-center gap-3 rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-600 shadow-soft">
+          <Loader2 className="animate-spin text-coral" size={18} aria-hidden="true" />
+          Updating manager records
+        </div>
+      )}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9">
         {stats.map((stat) => (
@@ -1367,10 +1366,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {status === "loading" ? (
-        <div className="mt-6 flex items-center gap-3 rounded-lg bg-white p-5 text-sm font-semibold text-stone-600 shadow-soft">
-          <Loader2 className="animate-spin text-coral" size={20} aria-hidden="true" />
-          Loading Velura records
+      {status === "error" ? (
+        <div className="mt-6 rounded-lg bg-rose-50 p-5 text-sm font-semibold text-rose-700">
+          Dashboard data could not be loaded. Please refresh in a moment.
         </div>
       ) : (
         <div className="mt-6">

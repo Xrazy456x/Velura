@@ -60,7 +60,7 @@ export const listEmployees = asyncHandler(async (req, res) => {
     return res.json({ employees });
   }
 
-  const employees = await Employee.find().sort({ status: 1, name: 1 }).populate("createdBy", "name email");
+  const employees = await Employee.find().sort({ status: 1, name: 1 }).populate("createdBy", "name email").lean();
   return res.json({ employees });
 });
 

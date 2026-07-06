@@ -62,7 +62,7 @@ export const listLeads = asyncHandler(async (req, res) => {
     return res.json({ leads });
   }
 
-  const leads = await Lead.find().sort({ createdAt: -1 });
+  const leads = await Lead.find().sort({ createdAt: -1 }).limit(250).lean();
   return res.json({ leads });
 });
 

@@ -467,11 +467,13 @@ export const listBookings = asyncHandler(async (req, res) => {
 
   const bookings = await Booking.find({ $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] })
     .sort({ scheduledFor: 1, createdAt: -1 })
+    .limit(300)
     .populate("lead", "status service name email phone company message")
     .populate("assignedEmployees", "name email phone role status")
     .populate("createdBy", "name email")
     .populate("assignedManager", "name email")
-    .populate("lastClientContactedBy", "name email");
+    .populate("lastClientContactedBy", "name email")
+    .lean();
 
   return res.json({ bookings });
 });
@@ -490,7 +492,8 @@ export const listDeletedBookings = asyncHandler(async (req, res) => {
     .populate("createdBy", "name email")
     .populate("deletedBy", "name email")
     .populate("assignedManager", "name email")
-    .populate("lastClientContactedBy", "name email");
+    .populate("lastClientContactedBy", "name email")
+    .lean();
 
   return res.json({ bookings });
 });
