@@ -1,10 +1,13 @@
 import { Router } from "express";
 import {
   calculateQuoteSchema,
+  createManagerCustomQuote,
+  createManagerCustomQuoteSchema,
   getPricing,
   getQuote,
   listQuoteRequests,
   quoteRequestIdSchema,
+  resendManagerCustomQuote,
   sendQuotePhotoRequest,
   submitQuoteRequest,
   submitQuoteRequestSchema,
@@ -20,7 +23,9 @@ const router = Router();
 
 router.post("/calculate", validate(calculateQuoteSchema), getQuote);
 router.post("/requests", validate(submitQuoteRequestSchema), submitQuoteRequest);
+router.post("/custom", requireAuth, requireRole("admin"), validate(createManagerCustomQuoteSchema), createManagerCustomQuote);
 router.get("/requests", requireAuth, requireRole("admin"), listQuoteRequests);
+router.post("/requests/:id/send-custom-quote", requireAuth, requireRole("admin"), validate(quoteRequestIdSchema), resendManagerCustomQuote);
 router.post("/requests/:id/photo-request", requireAuth, requireRole("admin"), validate(quoteRequestIdSchema), sendQuotePhotoRequest);
 router.patch("/requests/:id/status", requireAuth, requireRole("admin"), validate(updateQuoteRequestStatusSchema), updateQuoteRequestStatus);
 router.patch("/requests/:id/ownership", requireAuth, requireRole("admin"), validate(updateQuoteRequestOwnershipSchema), updateQuoteRequestOwnership);

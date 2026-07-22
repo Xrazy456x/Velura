@@ -689,7 +689,7 @@ function QuoteResult({ compact = false, error, quote, status }) {
 
   return (
     <div className={compact ? "mt-5 min-h-[296px]" : "mt-5"}>
-      <div className="relative min-h-[178px] rounded-lg bg-coal p-5 text-white">
+      <div className="relative min-h-[210px] overflow-hidden rounded-lg bg-coal p-5 text-white">
         {status === "loading" && (
           <div className="absolute right-4 top-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-extrabold text-stone-200">
             <Loader2 className="animate-spin text-gold" size={13} aria-hidden="true" />
@@ -697,7 +697,9 @@ function QuoteResult({ compact = false, error, quote, status }) {
           </div>
         )}
         <p className="min-h-6 pr-28 text-sm font-bold text-stone-300">{quote.propertyLabel}</p>
-        <p className="mt-2 min-h-[3.25rem] whitespace-nowrap text-4xl font-extrabold leading-tight text-gold tabular-nums">{quote.displayPrice}</p>
+        <p className="mt-2 min-h-[5rem] max-w-full whitespace-normal break-words text-3xl font-extrabold leading-tight text-gold tabular-nums sm:text-4xl">
+          {quote.displayPrice}
+        </p>
         {quote.estimatedDurationHours && (
           <p className="mt-2 min-h-6 text-sm font-semibold text-stone-200">
             Estimated duration: <span className="tabular-nums">{quote.estimatedDurationHours}</span> hours
@@ -725,7 +727,7 @@ function QuoteResult({ compact = false, error, quote, status }) {
         )
       )}
 
-      <p className="mt-4 min-h-12 text-xs font-semibold leading-5 text-stone-500">{quote.caveat}</p>
+      {!quote.needsInspection && <p className="mt-4 min-h-12 text-xs font-semibold leading-5 text-stone-500">{quote.caveat}</p>}
     </div>
   );
 }

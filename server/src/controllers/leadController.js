@@ -26,6 +26,12 @@ export const updateLeadStatusSchema = z.object({
   })
 });
 
+export const leadIdSchema = z.object({
+  params: z.object({
+    id: z.string().trim().min(1)
+  })
+});
+
 export const createLead = asyncHandler(async (req, res) => {
   const payload = req.validated.body;
   const lead = useFileDatabase()
@@ -58,21 +64,33 @@ export const createLead = asyncHandler(async (req, res) => {
 
 export const listLeads = asyncHandler(async (req, res) => {
   if (useFileDatabase()) {
-    const leads = await fileStore.listLeads();
-    return res.json({ leads });
+    const [leads, deletedLeads] = await Promise.all([fileStore.listLeads(), fileStore.listDeletedLeads()]);
+    return res.json({ leads, deletedLeads });
   }
 
-  const leads = await Lead.find().sort({ createdAt: -1 }).limit(250).lean();
-  return res.json({ leads });
+  const [leads, deletedLeads] = await Promise.all([
+    Lead.find({ $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] })
+      .sort({ createdAt: -1 })
+      .limit(250)
+      .lean(),
+    Lead.find({ deletedAt: { $exists: true, $ne: null } })
+      .sort({ deletedAt: -1 })
+      .limit(100)
+      .populate("deletedBy", "name email")
+      .lean()
+  ]);
+
+  return res.json({ leads, deletedLeads });
 });
 
 export const updateLeadStatus = asyncHandler(async (req, res) => {
   const { id } = req.validated.params;
   const { status } = req.validated.body;
-  const before = useFileDatabase() ? await fileStore.findLeadById(id) : await Lead.findById(id).lean();
+  const activeFilter = { _id: id, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] };
+  const before = useFileDatabase() ? await fileStore.findLeadById(id) : await Lead.findOne(activeFilter).lean();
   const lead = useFileDatabase()
     ? await fileStore.updateLeadStatus(id, status)
-    : await Lead.findByIdAndUpdate(id, { status }, { new: true, runValidators: true });
+    : await Lead.findOneAndUpdate(activeFilter, { status }, { new: true, runValidators: true });
 
   if (!lead) {
     return res.status(404).json({ message: "Lead not found." });
@@ -90,4 +108,75 @@ export const updateLeadStatus = asyncHandler(async (req, res) => {
   });
 
   return res.json({ lead });
+});
+
+export const deleteLead = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const lead = useFileDatabase()
+    ? await fileStore.softDeleteLead(id, req.user?._id || null)
+    : await Lead.findOneAndUpdate(
+        { _id: id, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] },
+        { $set: { deletedAt: new Date(), deletedBy: req.user?._id || null } },
+        { new: true, runValidators: true }
+      ).populate("deletedBy", "name email");
+
+  if (!lead) {
+    return res.status(404).json({ message: "Inquiry not found." });
+  }
+
+  await recordAuditEvent(req, {
+    action: "inquiry.deleted",
+    resource: "lead",
+    resourceId: lead._id,
+    summary: `Inquiry moved to recently deleted for ${lead.name}.`,
+    metadata: { name: lead.name, email: lead.email, service: lead.service }
+  });
+
+  return res.json({ lead });
+});
+
+export const restoreLead = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const lead = useFileDatabase()
+    ? await fileStore.restoreLead(id)
+    : await Lead.findOneAndUpdate(
+        { _id: id, deletedAt: { $exists: true, $ne: null } },
+        { $set: { deletedAt: null, deletedBy: null } },
+        { new: true, runValidators: true }
+      );
+
+  if (!lead) {
+    return res.status(404).json({ message: "Deleted inquiry not found." });
+  }
+
+  await recordAuditEvent(req, {
+    action: "inquiry.restored",
+    resource: "lead",
+    resourceId: lead._id,
+    summary: `Inquiry restored for ${lead.name}.`,
+    metadata: { name: lead.name, email: lead.email, service: lead.service }
+  });
+
+  return res.json({ lead });
+});
+
+export const permanentlyDeleteLead = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const lead = useFileDatabase()
+    ? await fileStore.permanentlyDeleteLead(id)
+    : await Lead.findOneAndDelete({ _id: id, deletedAt: { $exists: true, $ne: null } });
+
+  if (!lead) {
+    return res.status(404).json({ message: "Deleted inquiry not found." });
+  }
+
+  await recordAuditEvent(req, {
+    action: "inquiry.permanently_deleted",
+    resource: "lead",
+    resourceId: lead._id,
+    summary: `Inquiry permanently deleted for ${lead.name}.`,
+    metadata: { name: lead.name, email: lead.email, service: lead.service }
+  });
+
+  return res.json({ message: "Inquiry permanently deleted." });
 });

@@ -329,7 +329,7 @@ function propertyLabel(propertyType, bedrooms, serviceType) {
     return "Studio";
   }
 
-  return `${bedrooms} bedroom ${propertyTypes[propertyType] || "property"}`.trim();
+  return `${bedrooms}${bedrooms >= 5 ? "+" : ""} bedroom ${propertyTypes[propertyType] || "property"}`.trim();
 }
 
 function bedroomLabel(bedrooms) {

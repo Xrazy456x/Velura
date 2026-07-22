@@ -47,11 +47,22 @@ const leadSchema = new mongoose.Schema(
       type: String,
       default: "website",
       trim: true
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
     }
   },
   { timestamps: true }
 );
 
 leadSchema.index({ createdAt: -1 });
+leadSchema.index({ deletedAt: 1, createdAt: -1 });
 
 export default mongoose.model("Lead", leadSchema);

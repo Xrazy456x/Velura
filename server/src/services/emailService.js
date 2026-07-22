@@ -88,6 +88,15 @@ function humanStatus(value = "") {
   return String(value).replace(/_/g, " ");
 }
 
+function formatCurrency(pennies = 0) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    minimumFractionDigits: Number(pennies) % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2
+  }).format((Number(pennies) || 0) / 100);
+}
+
 function employeeName(employee) {
   return employee?.name || employee?.email || "Assigned cleaner";
 }
@@ -371,6 +380,61 @@ export async function sendQuotePhotoRequestEmail(quoteRequest) {
       referenceValue: reference,
       detailRows,
       replyNote: `Please reply directly to this email with the photos. Your reply will go to ${env.smtp.contactTo}.`
+    })
+  });
+}
+
+export async function sendManagerCustomQuoteEmail(quoteRequest) {
+  if (!isEmailConfigured()) {
+    console.info("Email provider is not configured. Skipping custom quote email.");
+    return { sent: false, reason: "Email provider not configured" };
+  }
+
+  const reference = quoteRequest.quoteReference || "VQ-CUSTOM";
+  const quote = quoteRequest.quoteResult || {};
+  const breakdown = Array.isArray(quote.breakdown) ? quote.breakdown : [];
+  const lines = [
+    `Hello ${quoteRequest.clientName},`,
+    "Thank you for considering Velura Services.",
+    "Following our review of your requirements, we have prepared the bespoke quote below."
+  ];
+  const detailRows = [
+    { label: "Quote reference", value: reference },
+    { label: "Service", value: quote.serviceLabel },
+    { label: "Property / scope", value: quote.propertyLabel },
+    { label: "Address", value: quoteRequest.address },
+    ...breakdown.map((line) => ({
+      label: line.quantity > 1 ? `${line.quantity} x ${line.label}` : line.label,
+      value: `${line.detail ? `${line.detail} - ` : ""}${line.displayPrice}`
+    })),
+    { label: "Quoted total", value: quote.displayPrice }
+  ];
+  const closingLines = [
+    quoteRequest.quoteNotes,
+    "Please reply directly to this email if you would like to accept the quote, ask a question, or discuss a suitable date."
+  ].filter(Boolean);
+  const textLines = [
+    ...lines,
+    "",
+    ...detailRows.filter((row) => row.value).map((row) => `${row.label}: ${row.value}`),
+    "",
+    ...closingLines,
+    "",
+    "Velura Services",
+    "Luxury cleaning, gently delivered"
+  ];
+
+  return sendEmail({
+    to: quoteRequest.email,
+    replyTo: env.smtp.contactTo,
+    subject: `[${reference}] Your custom quote from Velura Services - ${formatCurrency(quote.customTotalPennies)}`,
+    text: textLines.join("\n"),
+    html: buildEmailHtml("Your bespoke cleaning quote", [...lines, ...closingLines], {
+      eyebrow: "Velura custom quote",
+      referenceLabel: "Quote reference",
+      referenceValue: reference,
+      detailRows,
+      replyNote: `Reply directly to this email to contact Velura Services. Please keep ${reference} in the subject line.`
     })
   });
 }

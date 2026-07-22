@@ -25,7 +25,11 @@ export default function Login() {
 
     try {
       await login(form);
-      navigate(location.state?.from?.pathname || "/dashboard", { replace: true });
+      const requestedLocation = location.state?.from;
+      const destination = requestedLocation
+        ? `${requestedLocation.pathname}${requestedLocation.search || ""}${requestedLocation.hash || ""}`
+        : "/dashboard";
+      navigate(destination, { replace: true });
     } catch (requestError) {
       setError(getApiError(requestError, "Login failed."));
       setStatus("error");

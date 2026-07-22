@@ -152,7 +152,7 @@ export async function deleteUser(id) {
 
 export async function findLeadById(id) {
   const database = await readDatabase();
-  return clone(database.leads.find((item) => item._id === id) || null);
+  return clone(database.leads.find((item) => item._id === id && !item.deletedAt) || null);
 }
 
 export async function createLead(payload) {
@@ -168,6 +168,8 @@ export async function createLead(payload) {
       message: payload.message,
       status: "new",
       source: "website",
+      deletedAt: null,
+      deletedBy: null,
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -179,12 +181,21 @@ export async function createLead(payload) {
 
 export async function listLeads() {
   const database = await readDatabase();
-  return clone(sortNewest(database.leads));
+  return clone(sortNewest(database.leads.filter((lead) => !lead.deletedAt)));
+}
+
+export async function listDeletedLeads() {
+  const database = await readDatabase();
+  return clone(
+    [...database.leads]
+      .filter((lead) => lead.deletedAt)
+      .sort((a, b) => new Date(b.deletedAt || 0) - new Date(a.deletedAt || 0))
+  );
 }
 
 export async function updateLeadStatus(id, status) {
   return updateDatabase((database) => {
-    const lead = database.leads.find((item) => item._id === id);
+    const lead = database.leads.find((item) => item._id === id && !item.deletedAt);
 
     if (!lead) {
       return null;
@@ -192,6 +203,49 @@ export async function updateLeadStatus(id, status) {
 
     lead.status = status;
     lead.updatedAt = now();
+    return lead;
+  });
+}
+
+export async function softDeleteLead(id, deletedBy = null) {
+  return updateDatabase((database) => {
+    const lead = database.leads.find((item) => item._id === id && !item.deletedAt);
+
+    if (!lead) {
+      return null;
+    }
+
+    lead.deletedAt = now();
+    lead.deletedBy = deletedBy;
+    lead.updatedAt = now();
+    return lead;
+  });
+}
+
+export async function restoreLead(id) {
+  return updateDatabase((database) => {
+    const lead = database.leads.find((item) => item._id === id && item.deletedAt);
+
+    if (!lead) {
+      return null;
+    }
+
+    lead.deletedAt = null;
+    lead.deletedBy = null;
+    lead.updatedAt = now();
+    return lead;
+  });
+}
+
+export async function permanentlyDeleteLead(id) {
+  return updateDatabase((database) => {
+    const index = database.leads.findIndex((item) => item._id === id && item.deletedAt);
+
+    if (index === -1) {
+      return null;
+    }
+
+    const [lead] = database.leads.splice(index, 1);
     return lead;
   });
 }
@@ -265,7 +319,8 @@ export async function createQuoteRequest(payload) {
       quoteReference: payload.quoteReference,
       clientName: payload.clientName,
       email: payload.email.toLowerCase(),
-      phone: payload.phone,
+      phone: payload.phone || "",
+      source: payload.source || "website",
       address: payload.address || "",
       preferredDate: payload.preferredDate || "",
       preferredTime: payload.preferredTime || "",
@@ -281,6 +336,9 @@ export async function createQuoteRequest(payload) {
       quoteInput: payload.quoteInput,
       quoteResult: payload.quoteResult,
       photoRequestSentAt: payload.photoRequestSentAt || null,
+      quoteSentAt: payload.quoteSentAt || null,
+      deliveryStatus: payload.deliveryStatus || "not_applicable",
+      deliveryError: payload.deliveryError || "",
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -652,7 +710,8 @@ export async function getRecordCounts() {
 
   return {
     users: database.users.length,
-    leads: database.leads.length,
+    leads: database.leads.filter((lead) => !lead.deletedAt).length,
+    deletedLeads: database.leads.filter((lead) => lead.deletedAt).length,
     messages: database.messages.length,
     quoteRequests: database.quoteRequests.length,
     activeBookings: database.bookings.filter((booking) => !booking.deletedAt).length,

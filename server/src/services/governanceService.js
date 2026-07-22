@@ -55,7 +55,7 @@ const controls = [
   "Audit events store important history: who changed what, and when.",
   "Communication logs store email/SMS/phone actions without duplicating every email body.",
   "Manager ownership prevents two managers emailing the same client at the same time.",
-  "Recently deleted bookings are soft-deleted so mistakes can be restored.",
+  "Recently deleted bookings and enquiries are soft-deleted so mistakes can be restored.",
   "Passwords are hashed and never stored in plain text."
 ];
 
@@ -63,6 +63,7 @@ async function mongoCounts() {
   const [
     users,
     leads,
+    deletedLeads,
     messages,
     quoteRequests,
     activeBookings,
@@ -73,7 +74,8 @@ async function mongoCounts() {
     auditEvents
   ] = await Promise.all([
     User.countDocuments(),
-    Lead.countDocuments(),
+    Lead.countDocuments({ $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] }),
+    Lead.countDocuments({ deletedAt: { $exists: true, $ne: null } }),
     Message.countDocuments(),
     QuoteRequest.countDocuments(),
     Booking.countDocuments({ $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] }),
@@ -87,6 +89,7 @@ async function mongoCounts() {
   return {
     users,
     leads,
+    deletedLeads,
     messages,
     quoteRequests,
     activeBookings,

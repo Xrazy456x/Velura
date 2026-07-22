@@ -69,6 +69,50 @@ const initialEmployeeForm = {
   availabilityNotes: ""
 };
 
+function createCustomQuoteLine(overrides = {}) {
+  return {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    label: "",
+    detail: "",
+    quantity: 1,
+    unitPrice: "",
+    ...overrides
+  };
+}
+
+function createInitialCustomQuoteForm() {
+  const validUntil = new Date();
+  validUntil.setDate(validUntil.getDate() + 14);
+
+  return {
+    clientName: "",
+    email: "",
+    phone: "",
+    address: "",
+    serviceTitle: "Bespoke property clean",
+    propertySummary: "",
+    preferredDate: "",
+    preferredTime: "",
+    quoteNotes: `This quote is valid until ${validUntil.toLocaleDateString("en-GB")}.`,
+    lineItems: [createCustomQuoteLine({ label: "Cleaning service", detail: "Agreed cleaning scope", quantity: 1 })],
+    standardAddOns: [],
+    customTotal: ""
+  };
+}
+
+function poundsToPennies(value) {
+  return Math.max(0, Math.round((Number(value) || 0) * 100));
+}
+
+function formatQuoteMoney(pennies = 0) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    minimumFractionDigits: pennies % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2
+  }).format(pennies / 100);
+}
+
 const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const bookingTimeZone = "Europe/London";
 
@@ -391,6 +435,7 @@ export default function Dashboard() {
   const [toast, setToast] = useState(null);
   const [users, setUsers] = useState([]);
   const [leads, setLeads] = useState([]);
+  const [deletedLeads, setDeletedLeads] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [deletedBookings, setDeletedBookings] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -406,6 +451,7 @@ export default function Dashboard() {
   const [bookingForm, setBookingForm] = useState(() => createInitialBookingForm());
   const [bookingStatus, setBookingStatus] = useState("idle");
   const [bookingAction, setBookingAction] = useState("idle");
+  const [leadAction, setLeadAction] = useState("idle");
   const [editingBookingId, setEditingBookingId] = useState("");
   const [bookingFocus, setBookingFocus] = useState(null);
   const [invoiceForm, setInvoiceForm] = useState(() => createInitialInvoiceForm());
@@ -541,7 +587,10 @@ export default function Dashboard() {
         apiClient.get("/quote/requests").then((response) => setQuoteRequests(response.data.quoteRequests || [])),
         apiClient.get("/employees").then((response) => setEmployees(response.data.employees || [])),
         apiClient.get("/users").then((response) => setUsers(response.data.users || [])),
-        apiClient.get("/leads").then((response) => setLeads(response.data.leads || [])),
+        apiClient.get("/leads").then((response) => {
+          setLeads(response.data.leads || []);
+          setDeletedLeads(response.data.deletedLeads || []);
+        }),
         apiClient.get("/bookings/deleted").then((response) => setDeletedBookings(response.data.bookings || [])),
         apiClient.get("/invoices").then((response) => setInvoices(response.data.invoices || [])),
         apiClient.get("/quote/pricing").then((response) => setPricing(response.data.pricing || null))
@@ -571,13 +620,13 @@ export default function Dashboard() {
       { label: "Inquiries", value: leads.length, icon: ClipboardList, tone: "coral" },
       { label: "Bookings", value: bookings.length, icon: CalendarCheck, tone: "leaf" },
       { label: "Invoices", value: invoices.length, icon: FileText, tone: "coal" },
-      { label: "Deleted", value: deletedBookings.length, icon: Trash2, tone: "berry" },
+      { label: "Deleted", value: deletedBookings.length + deletedLeads.length, icon: Trash2, tone: "berry" },
       { label: "Cleaners", value: employees.length, icon: UsersRound, tone: "coral" },
       { label: "Quote reviews", value: quoteRequests.filter((quoteRequest) => activeQuoteStatuses.includes(quoteRequest.status)).length, icon: Mail, tone: "berry" },
       { label: "Google rating", value: reviewsMeta?.averageRating ? Number(reviewsMeta.averageRating).toFixed(1) : "N/A", icon: Star, tone: "coal" },
       { label: "Audit events", value: auditEvents.length, icon: History, tone: "leaf" }
     ],
-    [auditEvents.length, bookings.length, deletedBookings.length, employees.length, invoices.length, leads.length, quoteRequests.length, reviewsMeta, users]
+    [auditEvents.length, bookings.length, deletedBookings.length, deletedLeads.length, employees.length, invoices.length, leads.length, quoteRequests.length, reviewsMeta, users]
   );
 
   async function updateLeadStatus(leadId, nextStatus) {
@@ -591,6 +640,96 @@ export default function Dashboard() {
     } catch (requestError) {
       setLeads(previous);
       setError(getApiError(requestError, "Inquiry status could not be updated."));
+    }
+  }
+
+  async function deleteLead(leadId) {
+    if (!window.confirm("Move this enquiry to Recently deleted? You can restore it if this was a mistake.")) {
+      return;
+    }
+
+    const previousLeads = leads;
+    const previousDeletedLeads = deletedLeads;
+    const leadToDelete = leads.find((lead) => lead._id === leadId);
+    setError("");
+    setLeadAction(`delete:${leadId}`);
+    setLeads((current) => current.filter((lead) => lead._id !== leadId));
+
+    if (leadToDelete) {
+      setDeletedLeads((current) => [
+        { ...leadToDelete, deletedAt: new Date().toISOString(), deletedBy: user },
+        ...current.filter((lead) => lead._id !== leadId)
+      ]);
+    }
+
+    try {
+      const { data } = await apiClient.delete(`/leads/${leadId}`);
+      setDeletedLeads((current) => [data.lead, ...current.filter((lead) => lead._id !== leadId)]);
+      void loadAuditEvents();
+      showToast("Enquiry moved to Recently deleted.");
+    } catch (requestError) {
+      setLeads(previousLeads);
+      setDeletedLeads(previousDeletedLeads);
+      const message = getApiError(requestError, "Enquiry could not be deleted.");
+      setError(message);
+      showToast(message, "error");
+    } finally {
+      setLeadAction("idle");
+    }
+  }
+
+  async function restoreLead(leadId) {
+    const previousLeads = leads;
+    const previousDeletedLeads = deletedLeads;
+    const leadToRestore = deletedLeads.find((lead) => lead._id === leadId);
+    setError("");
+    setLeadAction(`restore:${leadId}`);
+    setDeletedLeads((current) => current.filter((lead) => lead._id !== leadId));
+
+    if (leadToRestore) {
+      setLeads((current) => [
+        { ...leadToRestore, deletedAt: null, deletedBy: null },
+        ...current.filter((lead) => lead._id !== leadId)
+      ]);
+    }
+
+    try {
+      const { data } = await apiClient.post(`/leads/${leadId}/restore`);
+      setLeads((current) => [data.lead, ...current.filter((lead) => lead._id !== leadId)]);
+      void loadAuditEvents();
+      showToast("Enquiry restored.");
+    } catch (requestError) {
+      setLeads(previousLeads);
+      setDeletedLeads(previousDeletedLeads);
+      const message = getApiError(requestError, "Enquiry could not be restored.");
+      setError(message);
+      showToast(message, "error");
+    } finally {
+      setLeadAction("idle");
+    }
+  }
+
+  async function permanentlyDeleteLead(leadId) {
+    if (!window.confirm("Permanently delete this enquiry? This cannot be undone.")) {
+      return;
+    }
+
+    const previousDeletedLeads = deletedLeads;
+    setError("");
+    setLeadAction(`permanent:${leadId}`);
+    setDeletedLeads((current) => current.filter((lead) => lead._id !== leadId));
+
+    try {
+      await apiClient.delete(`/leads/${leadId}/permanent`);
+      void loadAuditEvents();
+      showToast("Enquiry permanently deleted.");
+    } catch (requestError) {
+      setDeletedLeads(previousDeletedLeads);
+      const message = getApiError(requestError, "Enquiry could not be permanently deleted.");
+      setError(message);
+      showToast(message, "error");
+    } finally {
+      setLeadAction("idle");
     }
   }
 
@@ -1260,6 +1399,60 @@ export default function Dashboard() {
     }
   }
 
+  async function createCustomQuote(payload) {
+    setError("");
+    setQuoteAction("custom:create");
+
+    try {
+      const { data } = await apiClient.post("/quote/custom", payload);
+      setQuoteRequests((current) => [data.quoteRequest, ...current.filter((item) => item._id !== data.quoteRequest._id)]);
+      await loadAuditEvents();
+      showToast(`Custom quote ${data.quoteRequest.quoteReference} emailed to ${data.quoteRequest.clientName}.`);
+      return { ok: true, quoteRequest: data.quoteRequest };
+    } catch (requestError) {
+      const savedQuote = requestError.response?.data?.quoteRequest;
+      const message = getApiError(requestError, "Custom quote could not be created.");
+
+      if (savedQuote?._id) {
+        setQuoteRequests((current) => [savedQuote, ...current.filter((item) => item._id !== savedQuote._id)]);
+      }
+
+      setError(message);
+      showToast(message, "error");
+      return { ok: false, message, quoteRequest: savedQuote };
+    } finally {
+      setQuoteAction("idle");
+    }
+  }
+
+  async function resendCustomQuote(quoteRequest) {
+    setError("");
+    setQuoteAction(`custom:send:${quoteRequest._id}`);
+
+    try {
+      const { data } = await apiClient.post(`/quote/requests/${quoteRequest._id}/send-custom-quote`);
+      setQuoteRequests((current) =>
+        current.map((item) => (item._id === quoteRequest._id ? data.quoteRequest : item))
+      );
+      await loadAuditEvents();
+      showToast(`Custom quote ${data.quoteRequest.quoteReference} emailed to ${data.quoteRequest.clientName}.`);
+    } catch (requestError) {
+      const failedQuote = requestError.response?.data?.quoteRequest;
+      const message = getApiError(requestError, "Custom quote email could not be sent.");
+
+      if (failedQuote?._id) {
+        setQuoteRequests((current) =>
+          current.map((item) => (item._id === failedQuote._id ? failedQuote : item))
+        );
+      }
+
+      setError(message);
+      showToast(message, "error");
+    } finally {
+      setQuoteAction("idle");
+    }
+  }
+
   async function updateQuoteOwnership(quoteRequest, action) {
     if (action === "take" && isOwnedByAnotherUser(quoteRequest, user)) {
       const owner = recordUserLabel(quoteRequest.assignedManager, users);
@@ -1372,16 +1565,29 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="mt-6">
-          {activeTab === "leads" && <LeadTable leads={leads} onStatusChange={updateLeadStatus} />}
+          {activeTab === "leads" && (
+            <LeadTable
+              actionStatus={leadAction}
+              deletedLeads={deletedLeads}
+              leads={leads}
+              onDelete={deleteLead}
+              onPermanentDelete={permanentlyDeleteLead}
+              onRestore={restoreLead}
+              onStatusChange={updateLeadStatus}
+            />
+          )}
           {activeTab === "quotes" && (
             <QuoteReviewPanel
               actionStatus={quoteAction}
               currentUser={user}
+              pricing={pricing}
               quoteRequests={quoteRequests}
               users={users}
+              onCreateCustomQuote={createCustomQuote}
               onCreateBooking={startBookingFromQuote}
               onOwnershipChange={updateQuoteOwnership}
               onPhotoRequest={sendQuotePhotoRequest}
+              onSendCustomQuote={resendCustomQuote}
               onStatusChange={updateQuoteRequestStatus}
             />
           )}
@@ -2101,9 +2307,47 @@ function ReviewsPanel({ businessStatus, meta, reviews, status, onConnect, onDisc
   );
 }
 
-function LeadTable({ leads, onStatusChange }) {
+function LeadTable({ actionStatus, deletedLeads, leads, onDelete, onPermanentDelete, onRestore, onStatusChange }) {
+  const [view, setView] = useState("active");
+  const showingDeleted = view === "deleted";
+
   return (
     <div className="panel overflow-hidden">
+      <div className="flex flex-col gap-4 border-b border-stone-200 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-coral">Client enquiries</p>
+          <h2 className="mt-1 text-2xl font-extrabold text-coal">
+            {showingDeleted ? "Recently deleted" : "Active enquiries"}
+          </h2>
+          <p className="mt-1 text-sm font-semibold text-stone-500">
+            {showingDeleted
+              ? "Restore an enquiry or permanently remove it when it is no longer required."
+              : "Review incoming contact forms, update progress, or move old records out of the active list."}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-1 rounded-lg border border-stone-200 bg-mist p-1" aria-label="Enquiry views">
+          <button
+            className={`rounded-md px-4 py-2 text-sm font-extrabold transition ${
+              !showingDeleted ? "bg-coal text-white" : "text-stone-600 hover:bg-white hover:text-coal"
+            }`}
+            onClick={() => setView("active")}
+            type="button"
+          >
+            Active ({leads.length})
+          </button>
+          <button
+            className={`rounded-md px-4 py-2 text-sm font-extrabold transition ${
+              showingDeleted ? "bg-coal text-white" : "text-stone-600 hover:bg-white hover:text-coal"
+            }`}
+            onClick={() => setView("deleted")}
+            type="button"
+          >
+            Deleted ({deletedLeads.length})
+          </button>
+        </div>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
           <thead className="bg-mist text-xs font-bold uppercase tracking-wide text-stone-500">
@@ -2111,36 +2355,97 @@ function LeadTable({ leads, onStatusChange }) {
               <th className="px-4 py-3">Inquiry</th>
               <th className="px-4 py-3">Service</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Received</th>
+              <th className="px-4 py-3">{showingDeleted ? "Deleted" : "Received"}</th>
+              <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-200">
-            {leads.map((lead) => (
+            {(showingDeleted ? deletedLeads : leads).map((lead) => (
               <tr key={lead._id}>
-                <td className="px-4 py-4">
+                <td className="min-w-64 px-4 py-4">
                   <p className="font-extrabold text-coal">{lead.name}</p>
                   <p className="text-stone-500">{lead.email}</p>
                   {lead.company && <p className="text-stone-500">{lead.company}</p>}
+                  {lead.message && <p className="mt-2 max-w-xl text-xs font-semibold leading-5 text-stone-500">{lead.message}</p>}
                 </td>
                 <td className="px-4 py-4 font-semibold text-stone-700">{lead.service}</td>
                 <td className="px-4 py-4">
-                  <div className="flex flex-wrap items-center gap-2">
+                  {showingDeleted ? (
                     <StatusBadge value={lead.status} />
-                    <select
-                      className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-700"
-                      value={lead.status}
-                      onChange={(event) => onStatusChange(lead._id, event.target.value)}
-                    >
-                      <option value="new">new</option>
-                      <option value="contacted">contacted</option>
-                      <option value="closed">closed</option>
-                    </select>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge value={lead.status} />
+                      <select
+                        className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-700"
+                        value={lead.status}
+                        onChange={(event) => onStatusChange(lead._id, event.target.value)}
+                      >
+                        <option value="new">new</option>
+                        <option value="contacted">contacted</option>
+                        <option value="closed">closed</option>
+                      </select>
+                    </div>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-4 text-stone-500">
+                  {new Date(showingDeleted ? lead.deletedAt : lead.createdAt).toLocaleDateString("en-GB")}
+                  {showingDeleted && lead.deletedBy?.name && (
+                    <p className="mt-1 text-xs font-semibold text-stone-400">by {lead.deletedBy.name}</p>
+                  )}
+                </td>
+                <td className="px-4 py-4">
+                  <div className="flex justify-end gap-2">
+                    {showingDeleted ? (
+                      <>
+                        <button
+                          className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-extrabold text-stone-700 transition hover:border-coal hover:text-coal disabled:opacity-60"
+                          disabled={actionStatus !== "idle"}
+                          onClick={() => onRestore(lead._id)}
+                          type="button"
+                        >
+                          {actionStatus === `restore:${lead._id}` ? (
+                            <Loader2 className="animate-spin" size={15} aria-hidden="true" />
+                          ) : (
+                            <RefreshCw size={15} aria-hidden="true" />
+                          )}
+                          Restore
+                        </button>
+                        <button
+                          className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-extrabold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+                          disabled={actionStatus !== "idle"}
+                          onClick={() => onPermanentDelete(lead._id)}
+                          type="button"
+                        >
+                          {actionStatus === `permanent:${lead._id}` ? (
+                            <Loader2 className="animate-spin" size={15} aria-hidden="true" />
+                          ) : (
+                            <Trash2 size={15} aria-hidden="true" />
+                          )}
+                          Delete permanently
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-extrabold text-stone-700 transition hover:border-rose-300 hover:text-rose-700 disabled:opacity-60"
+                        disabled={actionStatus !== "idle"}
+                        onClick={() => onDelete(lead._id)}
+                        type="button"
+                      >
+                        {actionStatus === `delete:${lead._id}` ? (
+                          <Loader2 className="animate-spin" size={15} aria-hidden="true" />
+                        ) : (
+                          <Trash2 size={15} aria-hidden="true" />
+                        )}
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </td>
-                <td className="px-4 py-4 text-stone-500">{new Date(lead.createdAt).toLocaleDateString()}</td>
               </tr>
             ))}
-            {leads.length === 0 && <EmptyRow label="No inquiries yet" columns={4} />}
+            {(showingDeleted ? deletedLeads : leads).length === 0 && (
+              <EmptyRow label={showingDeleted ? "No deleted enquiries" : "No enquiries yet"} columns={5} />
+            )}
           </tbody>
         </table>
       </div>
@@ -2859,17 +3164,389 @@ function quoteStatusLabel(value = "") {
   return String(value || "").replace(/_/g, " ");
 }
 
+function CustomQuoteComposer({ actionStatus, onCancel, onCreate, pricing }) {
+  const [form, setForm] = useState(() => createInitialCustomQuoteForm());
+  const [selectedAddOnKey, setSelectedAddOnKey] = useState("");
+  const [totalWasEdited, setTotalWasEdited] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const standardAddOns = pricing?.addOns || [];
+  const selectedStandardAddOns = form.standardAddOns.map((selected) => ({
+    ...selected,
+    definition: standardAddOns.find((addOn) => addOn.key === selected.key)
+  }));
+  const breakdownSubtotal = useMemo(() => {
+    const customLinesTotal = form.lineItems.reduce(
+      (sum, line) => sum + line.quantity * poundsToPennies(line.unitPrice),
+      0
+    );
+    const addOnTotal = selectedStandardAddOns.reduce(
+      (sum, selected) => sum + selected.quantity * (selected.definition?.pricePennies || 0),
+      0
+    );
+
+    return customLinesTotal + addOnTotal;
+  }, [form.lineItems, selectedStandardAddOns]);
+  const finalTotalPennies = poundsToPennies(form.customTotal);
+  const totalDifference = finalTotalPennies - breakdownSubtotal;
+  const availableAddOns = standardAddOns.filter(
+    (addOn) => !form.standardAddOns.some((selected) => selected.key === addOn.key)
+  );
+
+  useEffect(() => {
+    if (!totalWasEdited) {
+      setForm((current) => ({ ...current, customTotal: (breakdownSubtotal / 100).toFixed(2) }));
+    }
+  }, [breakdownSubtotal, totalWasEdited]);
+
+  function updateField(name, value) {
+    setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateLine(id, name, value) {
+    setForm((current) => ({
+      ...current,
+      lineItems: current.lineItems.map((line) => (line.id === id ? { ...line, [name]: value } : line))
+    }));
+  }
+
+  function addLine() {
+    setForm((current) => ({ ...current, lineItems: [...current.lineItems, createCustomQuoteLine()] }));
+  }
+
+  function removeLine(id) {
+    setForm((current) => ({
+      ...current,
+      lineItems: current.lineItems.filter((line) => line.id !== id)
+    }));
+  }
+
+  function addStandardAddOn() {
+    if (!selectedAddOnKey || form.standardAddOns.some((addOn) => addOn.key === selectedAddOnKey)) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      standardAddOns: [...current.standardAddOns, { key: selectedAddOnKey, quantity: 1 }]
+    }));
+    setSelectedAddOnKey("");
+  }
+
+  function updateStandardAddOn(key, quantity) {
+    setForm((current) => ({
+      ...current,
+      standardAddOns: current.standardAddOns.map((addOn) => (addOn.key === key ? { ...addOn, quantity } : addOn))
+    }));
+  }
+
+  function removeStandardAddOn(key) {
+    setForm((current) => ({
+      ...current,
+      standardAddOns: current.standardAddOns.filter((addOn) => addOn.key !== key)
+    }));
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSubmitError("");
+
+    const payload = {
+      clientName: form.clientName,
+      email: form.email,
+      phone: form.phone,
+      address: form.address,
+      serviceTitle: form.serviceTitle,
+      propertySummary: form.propertySummary,
+      preferredDate: form.preferredDate,
+      preferredTime: form.preferredTime,
+      quoteNotes: form.quoteNotes,
+      customTotalPennies: finalTotalPennies,
+      lineItems: form.lineItems.map((line) => ({
+        label: line.label,
+        detail: line.detail,
+        quantity: Number(line.quantity),
+        unitPricePennies: poundsToPennies(line.unitPrice)
+      })),
+      standardAddOns: form.standardAddOns.map((addOn) => ({
+        key: addOn.key,
+        quantity: Number(addOn.quantity)
+      }))
+    };
+    const result = await onCreate(payload);
+
+    if (result.ok) {
+      setForm(createInitialCustomQuoteForm());
+      setTotalWasEdited(false);
+      onCancel();
+      return;
+    }
+
+    setSubmitError(result.message || "The custom quote could not be sent.");
+  }
+
+  return (
+    <form className="border-t border-stone-200" onSubmit={handleSubmit}>
+      <div className="grid gap-6 p-5 sm:p-6">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <label className="grid gap-2 text-sm font-bold text-coal">
+            Client name
+            <input
+              aria-label="Custom quote client name"
+              className="input-field"
+              value={form.clientName}
+              onChange={(event) => updateField("clientName", event.target.value)}
+              required
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-coal">
+            Client email
+            <input
+              aria-label="Custom quote client email"
+              className="input-field"
+              type="email"
+              value={form.email}
+              onChange={(event) => updateField("email", event.target.value)}
+              required
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-coal">
+            Phone <span className="font-semibold text-stone-400">Optional</span>
+            <input className="input-field" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-coal">
+            Property address <span className="font-semibold text-stone-400">Optional</span>
+            <input className="input-field" value={form.address} onChange={(event) => updateField("address", event.target.value)} />
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-coal">
+            Quote title
+            <input className="input-field" value={form.serviceTitle} onChange={(event) => updateField("serviceTitle", event.target.value)} required />
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-coal">
+            Property / scope summary
+            <input
+              aria-label="Custom quote property summary"
+              className="input-field"
+              value={form.propertySummary}
+              onChange={(event) => updateField("propertySummary", event.target.value)}
+              placeholder="For example: 7 bedroom house, 4 bathrooms"
+              required
+            />
+          </label>
+        </div>
+
+        <section className="border-y border-stone-200 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="eyebrow">Service breakdown</p>
+              <h3 className="mt-1 text-lg font-extrabold text-coal">Custom service lines</h3>
+            </div>
+            <button className="button-secondary px-3 py-2" type="button" onClick={addLine}>
+              <Plus size={16} aria-hidden="true" />
+              Add line
+            </button>
+          </div>
+          <div className="mt-4 grid gap-3">
+            {form.lineItems.map((line, index) => (
+              <div
+                className="grid min-w-0 gap-3 rounded-lg bg-mist p-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_88px_128px_44px] lg:items-end"
+                key={line.id}
+              >
+                <label className="grid min-w-0 gap-2 text-xs font-bold text-stone-600">
+                  Service
+                  <input
+                    aria-label={`Custom service line ${index + 1}`}
+                    className="input-field min-w-0"
+                    value={line.label}
+                    onChange={(event) => updateLine(line.id, "label", event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="grid min-w-0 gap-2 text-xs font-bold text-stone-600">
+                  Description
+                  <input
+                    className="input-field min-w-0"
+                    value={line.detail}
+                    onChange={(event) => updateLine(line.id, "detail", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-2 text-xs font-bold text-stone-600">
+                  Quantity
+                  <input
+                    className="input-field px-3"
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={line.quantity}
+                    onChange={(event) => updateLine(line.id, "quantity", Number(event.target.value))}
+                    required
+                  />
+                </label>
+                <label className="grid gap-2 text-xs font-bold text-stone-600">
+                  Unit price (£)
+                  <input
+                    aria-label={`Custom service price ${index + 1}`}
+                    className="input-field px-3 tabular-nums"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={line.unitPrice}
+                    onChange={(event) => updateLine(line.id, "unitPrice", event.target.value)}
+                    required
+                  />
+                </label>
+                <button
+                  aria-label={`Remove custom service line ${index + 1}`}
+                  className="grid h-11 w-11 place-items-center rounded-lg border border-stone-300 bg-white text-stone-500 transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  type="button"
+                  onClick={() => removeLine(line.id)}
+                  disabled={form.lineItems.length === 1}
+                >
+                  <Trash2 size={17} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <div>
+            <p className="eyebrow">Standard pricing</p>
+            <h3 className="mt-1 text-lg font-extrabold text-coal">Velura add-ons</h3>
+            <p className="mt-1 text-sm font-semibold text-stone-500">These prices come from the manager pricing list and cannot be edited here.</p>
+          </div>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <select
+              aria-label="Select a standard add-on"
+              className="input-field"
+              value={selectedAddOnKey}
+              onChange={(event) => setSelectedAddOnKey(event.target.value)}
+              disabled={!availableAddOns.length}
+            >
+              <option value="">{pricing ? "Choose a standard add-on" : "Loading add-on prices"}</option>
+              {availableAddOns.map((addOn) => (
+                <option key={addOn.key} value={addOn.key}>
+                  {addOn.label} - {addOn.price} per {addOn.unit}
+                </option>
+              ))}
+            </select>
+            <button className="button-secondary shrink-0" type="button" onClick={addStandardAddOn} disabled={!selectedAddOnKey}>
+              <Plus size={17} aria-hidden="true" />
+              Add service
+            </button>
+          </div>
+          {selectedStandardAddOns.length > 0 && (
+            <div className="mt-4 grid gap-2">
+              {selectedStandardAddOns.map(({ key, quantity, definition }) => (
+                <div className="grid gap-3 border-b border-stone-200 py-3 sm:grid-cols-[minmax(0,1fr)_90px_130px_44px] sm:items-center" key={key}>
+                  <div className="min-w-0">
+                    <p className="font-extrabold text-coal">{definition?.label || key}</p>
+                    <p className="text-xs font-semibold text-stone-500">Fixed at {definition?.price || "-"} per {definition?.unit || "item"}</p>
+                  </div>
+                  <input
+                    aria-label={`${definition?.label || key} quantity`}
+                    className="input-field px-3"
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={quantity}
+                    onChange={(event) => updateStandardAddOn(key, Number(event.target.value))}
+                  />
+                  <p className="text-right text-sm font-extrabold tabular-nums text-coal">
+                    {formatQuoteMoney(quantity * (definition?.pricePennies || 0))}
+                  </p>
+                  <button
+                    aria-label={`Remove ${definition?.label || key}`}
+                    className="grid h-11 w-11 place-items-center rounded-lg border border-stone-300 text-stone-500 transition hover:border-rose-300 hover:text-rose-600"
+                    type="button"
+                    onClick={() => removeStandardAddOn(key)}
+                  >
+                    <Trash2 size={17} aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="grid gap-5 border-t border-stone-200 pt-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-bold text-coal">
+              Preferred date <span className="font-semibold text-stone-400">Optional</span>
+              <input className="input-field" type="date" value={form.preferredDate} onChange={(event) => updateField("preferredDate", event.target.value)} />
+            </label>
+            <label className="grid gap-2 text-sm font-bold text-coal">
+              Preferred time <span className="font-semibold text-stone-400">Optional</span>
+              <input className="input-field" type="time" value={form.preferredTime} onChange={(event) => updateField("preferredTime", event.target.value)} />
+            </label>
+            <label className="grid gap-2 text-sm font-bold text-coal sm:col-span-2">
+              Client message / quote notes
+              <textarea
+                className="input-field min-h-28 resize-none"
+                value={form.quoteNotes}
+                onChange={(event) => updateField("quoteNotes", event.target.value)}
+                placeholder="Terms, exclusions, validity, or anything the client should know."
+              />
+            </label>
+          </div>
+          <div className="rounded-lg bg-coal p-5 text-white">
+            <div className="flex items-center justify-between gap-3 border-b border-white/15 pb-4 text-sm font-bold text-stone-300">
+              <span>Breakdown subtotal</span>
+              <span className="tabular-nums text-white">{formatQuoteMoney(breakdownSubtotal)}</span>
+            </div>
+            <label className="mt-4 grid gap-2 text-sm font-bold text-white">
+              Final quoted total (£)
+              <input
+                aria-label="Final custom quote total"
+                className="w-full rounded-lg border border-gold/60 bg-white px-4 py-3 text-2xl font-extrabold tabular-nums text-coal outline-none focus:ring-4 focus:ring-gold/25"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={form.customTotal}
+                onChange={(event) => {
+                  setTotalWasEdited(true);
+                  updateField("customTotal", event.target.value);
+                }}
+                required
+              />
+            </label>
+            <p className="mt-3 min-h-10 text-xs font-semibold leading-5 text-stone-300">
+              {totalDifference === 0
+                ? "Final total matches the service breakdown."
+                : `${formatQuoteMoney(Math.abs(totalDifference))} ${totalDifference > 0 ? "above" : "below"} the breakdown subtotal.`}
+            </p>
+          </div>
+        </section>
+
+        {submitError && <div className="rounded-lg bg-rose-50 p-4 text-sm font-bold text-rose-700">{submitError}</div>}
+      </div>
+      <div className="flex flex-col-reverse gap-3 border-t border-stone-200 bg-mist p-4 sm:flex-row sm:items-center sm:justify-end">
+        <button className="button-secondary" type="button" onClick={onCancel} disabled={actionStatus === "custom:create"}>
+          Cancel
+        </button>
+        <button className="button-primary" type="submit" disabled={actionStatus === "custom:create"}>
+          {actionStatus === "custom:create" ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <Send size={18} aria-hidden="true" />}
+          {actionStatus === "custom:create" ? "Sending quote" : "Create and email quote"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function QuoteReviewPanel({
   actionStatus,
   currentUser,
+  pricing,
   quoteRequests,
   users,
+  onCreateCustomQuote,
   onCreateBooking,
   onOwnershipChange,
   onPhotoRequest,
+  onSendCustomQuote,
   onStatusChange
 }) {
   const [activeQuoteFilter, setActiveQuoteFilter] = useState("active");
+  const [showCustomQuote, setShowCustomQuote] = useState(false);
   const activeFilter = quoteFilterTabs.find((filter) => filter.key === activeQuoteFilter) || quoteFilterTabs[0];
   const visibleQuoteRequests = quoteRequests.filter((quoteRequest) => activeFilter.statuses.includes(quoteRequest.status));
   const quoteCounts = quoteFilterTabs.reduce(
@@ -2881,15 +3558,34 @@ function QuoteReviewPanel({
   );
 
   return (
-    <div className="panel overflow-hidden">
-      <div className="border-b border-stone-200 bg-white p-5">
-        <p className="eyebrow">Quote review</p>
-        <h2 className="mt-1 text-2xl font-extrabold text-coal">Review submitted quotes</h2>
-        <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-stone-500">
-          The active queue shows quote requests that still need work. Booked and closed quotes stay archived here for
-          audit and follow-up.
-        </p>
-        <div className="mt-5 flex flex-wrap gap-2">
+    <div className="grid gap-5">
+      <section className="panel overflow-hidden">
+        <div className="flex flex-col gap-4 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="eyebrow">Manager quoting</p>
+            <h2 className="mt-1 text-2xl font-extrabold text-coal">Create a bespoke quote</h2>
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-stone-500">
+              Build a service breakdown, retain Velura's standard add-on prices, set the final total, and email it directly to the client.
+            </p>
+          </div>
+          <button className={showCustomQuote ? "button-secondary shrink-0" : "button-primary shrink-0"} type="button" onClick={() => setShowCustomQuote((current) => !current)}>
+            {showCustomQuote ? <X size={18} aria-hidden="true" /> : <Calculator size={18} aria-hidden="true" />}
+            {showCustomQuote ? "Close quote builder" : "Create custom quote"}
+          </button>
+        </div>
+        {showCustomQuote && (
+          <CustomQuoteComposer actionStatus={actionStatus} onCancel={() => setShowCustomQuote(false)} onCreate={onCreateCustomQuote} pricing={pricing} />
+        )}
+      </section>
+
+      <section className="panel overflow-hidden">
+        <div className="border-b border-stone-200 bg-white p-5">
+          <p className="eyebrow">Quote review</p>
+          <h2 className="mt-1 text-2xl font-extrabold text-coal">Review submitted quotes</h2>
+          <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-stone-500">
+            The active queue shows quote requests that still need work. Booked and closed quotes stay archived here for audit and follow-up.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
           {quoteFilterTabs.map((filter) => (
             <button
               className={`rounded-lg px-3 py-2 text-xs font-extrabold transition ${
@@ -2902,9 +3598,9 @@ function QuoteReviewPanel({
               {filter.label} ({quoteCounts[filter.key] || 0})
             </button>
           ))}
+          </div>
         </div>
-      </div>
-      <div className="overflow-x-auto">
+        <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
           <thead className="bg-mist text-xs font-bold uppercase tracking-wide text-stone-500">
             <tr>
@@ -2930,6 +3626,9 @@ function QuoteReviewPanel({
                   <td className="px-4 py-4">
                     <p className="font-extrabold text-coal">{quoteRequest.quoteReference}</p>
                     <p className="mt-1 text-xs font-bold text-stone-500">{quoteStatusLabel(quoteRequest.status)}</p>
+                    {quoteRequest.source === "manager_custom" && (
+                      <span className="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-1 text-[10px] font-extrabold uppercase text-berry">Custom</span>
+                    )}
                   </td>
                   <td className="px-4 py-4">
                     <p className="font-extrabold text-coal">{quoteRequest.clientName}</p>
@@ -2976,6 +3675,11 @@ function QuoteReviewPanel({
                         Photos requested {new Date(quoteRequest.photoRequestSentAt).toLocaleDateString("en-GB")}
                       </p>
                     )}
+                    {quoteRequest.source === "manager_custom" && (
+                      <p className={`mt-2 text-xs font-bold ${quoteRequest.deliveryStatus === "failed" ? "text-rose-600" : "text-emerald-700"}`}>
+                        {quoteRequest.deliveryStatus === "failed" ? "Email failed" : quoteRequest.quoteSentAt ? "Quote emailed" : "Email pending"}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-wrap gap-2">
@@ -3009,6 +3713,22 @@ function QuoteReviewPanel({
                         )}
                         Ask photos
                       </button>
+                      {quoteRequest.source === "manager_custom" && (
+                        <button
+                          className="button-secondary whitespace-nowrap px-3 py-2"
+                          type="button"
+                          onClick={() => onSendCustomQuote(quoteRequest)}
+                          disabled={ownedBySomeoneElse || actionStatus === `custom:send:${quoteRequest._id}`}
+                          title={ownedBySomeoneElse ? "Take over this quote before emailing the client." : "Email this custom quote to the client"}
+                        >
+                          {actionStatus === `custom:send:${quoteRequest._id}` ? (
+                            <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+                          ) : (
+                            <Send size={16} aria-hidden="true" />
+                          )}
+                          {quoteRequest.deliveryStatus === "sent" ? "Resend quote" : "Send quote"}
+                        </button>
+                      )}
                       <button className="button-secondary whitespace-nowrap px-3 py-2" type="button" onClick={() => onCreateBooking(quoteRequest)}>
                         <CalendarCheck size={16} aria-hidden="true" />
                         Create booking
@@ -3022,7 +3742,8 @@ function QuoteReviewPanel({
             {visibleQuoteRequests.length === 0 && <EmptyRow label={`No ${activeFilter.label.toLowerCase()} quote requests.`} columns={8} />}
           </tbody>
         </table>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -3205,6 +3926,7 @@ function GovernancePanel({ governance }) {
   const countItems = [
     ["Users", counts.users],
     ["Leads", counts.leads],
+    ["Deleted enquiries", counts.deletedLeads],
     ["Quotes", counts.quoteRequests],
     ["Active bookings", counts.activeBookings],
     ["Deleted bookings", counts.deletedBookings],

@@ -26,9 +26,14 @@ const quoteRequestSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: true,
       trim: true,
       maxlength: 40
+    },
+    source: {
+      type: String,
+      enum: ["website", "manager_custom"],
+      default: "website",
+      index: true
     },
     address: {
       type: String,
@@ -89,7 +94,7 @@ const quoteRequestSchema = new mongoose.Schema(
     },
     lastClientContactType: {
       type: String,
-      enum: ["email", "sms", "phone", "photo_request", "status_update", ""],
+      enum: ["email", "sms", "phone", "photo_request", "quote", "status_update", ""],
       default: ""
     },
     quoteInput: {
@@ -103,6 +108,22 @@ const quoteRequestSchema = new mongoose.Schema(
     photoRequestSentAt: {
       type: Date,
       default: null
+    },
+    quoteSentAt: {
+      type: Date,
+      default: null
+    },
+    deliveryStatus: {
+      type: String,
+      enum: ["not_applicable", "pending", "sent", "failed"],
+      default: "not_applicable",
+      index: true
+    },
+    deliveryError: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: ""
     }
   },
   { timestamps: true }

@@ -231,7 +231,9 @@ async function findLead(leadId) {
     return null;
   }
 
-  return useFileDatabase() ? fileStore.findLeadById(leadId) : Lead.findById(leadId).lean();
+  return useFileDatabase()
+    ? fileStore.findLeadById(leadId)
+    : Lead.findOne({ _id: leadId, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] }).lean();
 }
 
 async function findEmployees(employeeIds = []) {
