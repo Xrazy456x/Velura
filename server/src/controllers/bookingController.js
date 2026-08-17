@@ -98,7 +98,9 @@ export const updateBookingSchema = z.object({
   params: z.object({
     id: z.string().min(1)
   }),
-  body: bookingBodySchema.omit({ sendConfirmation: true })
+  body: bookingBodySchema.extend({
+    sendConfirmation: z.boolean().optional().default(false)
+  })
 });
 
 export const updateBookingStatusSchema = z.object({
@@ -583,6 +585,17 @@ export const updateBooking = asyncHandler(async (req, res) => {
   }
 
   let booking = await updateBookingRecord(id, normalizeBookingUpdates(payload, lead, employees));
+  let clientCommunication = null;
+
+  if (payload.sendConfirmation) {
+    clientCommunication = await attemptClientCommunication(() => sendBookingConfirmation(booking));
+    booking = await persistCommunicationLog(
+      booking,
+      buildCommunicationLog("email", "booking_confirmation", clientCommunication),
+      clientCommunication?.sent ? clientContactUpdates(req, "email", "booked") : ownerUpdates(req, "in_progress")
+    );
+  }
+
   const teamNotification = await attemptTeamNotification(booking, "updated");
   booking = await persistCommunicationLog(
     booking,
@@ -623,11 +636,12 @@ export const updateBooking = asyncHandler(async (req, res) => {
         parkingNotes: booking.parkingNotes,
         notes: booking.notes
       },
-      teamNotification
+      teamNotification,
+      clientCommunication
     }
   });
 
-  return res.json({ booking, teamNotification });
+  return res.json({ booking, teamNotification, clientCommunication });
 });
 
 export const sendBookingEmailConfirmation = asyncHandler(async (req, res) => {

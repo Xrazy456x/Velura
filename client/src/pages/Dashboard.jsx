@@ -100,6 +100,123 @@ function createInitialCustomQuoteForm() {
   };
 }
 
+function humanizeQuoteValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "Not provided";
+  }
+
+  return String(value)
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function pricingOptionLabel(options, key) {
+  return options?.[key]?.label || humanizeQuoteValue(key);
+}
+
+function getRequestedAddOns(quoteRequest, pricing) {
+  const input = quoteRequest.quoteInput || {};
+  const definitions = new Map((pricing?.addOns || []).map((addOn) => [addOn.key, addOn]));
+
+  if (Array.isArray(input.standardAddOns)) {
+    return input.standardAddOns.map(({ key, quantity = 1 }) => ({
+      key,
+      label: definitions.get(key)?.label || humanizeQuoteValue(key),
+      quantity,
+      unit: definitions.get(key)?.unit || "item"
+    }));
+  }
+
+  return (input.addOns || []).map((key) => {
+    const definition = definitions.get(key);
+    const quantity =
+      key === "carpet_steam"
+        ? Number(input.carpetRooms || 1)
+        : key === "linen"
+          ? Number(input.linenSets || 1)
+          : definition?.category === "commercial" && definition?.unit === "area"
+            ? Number(input.addOnAreas || 1)
+            : 1;
+
+    return {
+      key,
+      label: definition?.label || humanizeQuoteValue(key),
+      quantity,
+      unit: definition?.unit || "item"
+    };
+  });
+}
+
+function QuoteRequestBreakdown({ pricing, quoteRequest }) {
+  const input = quoteRequest.quoteInput || {};
+  const quote = quoteRequest.quoteResult || {};
+  const addOns = getRequestedAddOns(quoteRequest, pricing);
+  const workspace = ["office", "commercial"].includes(input.serviceType);
+
+  return (
+    <div className="mt-3 grid gap-3">
+      <div className={`rounded-lg border p-3 ${addOns.length ? "border-amber-200 bg-amber-50" : "border-stone-200 bg-stone-50"}`}>
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-berry">Requested add-ons</p>
+        {addOns.length ? (
+          <ul className="mt-2 grid gap-1.5">
+            {addOns.map((addOn) => (
+              <li className="flex items-start justify-between gap-3 text-xs font-bold text-coal" key={addOn.key}>
+                <span>✓ {addOn.label}</span>
+                <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] uppercase text-berry">
+                  {addOn.quantity} {addOn.unit}{addOn.quantity === 1 ? "" : "s"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1 text-xs font-semibold text-stone-500">No add-ons selected</p>
+        )}
+      </div>
+
+      <details className="group rounded-lg border border-stone-200 bg-white">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-extrabold text-coal">
+          View full enquiry breakdown
+          <ChevronDown className="transition group-open:rotate-180" size={16} aria-hidden="true" />
+        </summary>
+        <div className="grid gap-4 border-t border-stone-200 p-3 text-xs text-stone-600">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+            <div><dt className="font-bold text-stone-400">Service</dt><dd className="font-extrabold text-coal">{quote.serviceLabel || humanizeQuoteValue(input.serviceType)}</dd></div>
+            <div><dt className="font-bold text-stone-400">Property</dt><dd className="font-extrabold text-coal">{quote.propertyLabel || humanizeQuoteValue(input.propertyType)}</dd></div>
+            <div><dt className="font-bold text-stone-400">{workspace ? "Work areas" : "Bedrooms"}</dt><dd className="font-extrabold text-coal">{input.bedrooms ?? "Not provided"}</dd></div>
+            <div><dt className="font-bold text-stone-400">{workspace ? "Washrooms" : "Bathrooms"}</dt><dd className="font-extrabold text-coal">{input.bathrooms ?? "Not provided"}</dd></div>
+            <div><dt className="font-bold text-stone-400">Condition</dt><dd className="font-extrabold text-coal">{pricingOptionLabel(pricing?.conditionOptions, input.condition)}</dd></div>
+            <div><dt className="font-bold text-stone-400">Urgency</dt><dd className="font-extrabold text-coal">{pricingOptionLabel(pricing?.urgencyOptions, input.urgency)}</dd></div>
+            {input.serviceType === "regular" && <div><dt className="font-bold text-stone-400">Frequency</dt><dd className="font-extrabold text-coal">{pricingOptionLabel(pricing?.frequencyOptions, input.frequency)}</dd></div>}
+            {quote.estimatedDurationHours && <div><dt className="font-bold text-stone-400">Estimated duration</dt><dd className="font-extrabold text-coal">{quote.estimatedDurationHours} hours</dd></div>}
+          </dl>
+
+          {Array.isArray(quote.breakdown) && quote.breakdown.length > 0 && (
+            <div>
+              <p className="font-extrabold text-coal">Price breakdown</p>
+              <ul className="mt-2 divide-y divide-stone-100 rounded-lg border border-stone-200">
+                {quote.breakdown.map((line, index) => (
+                  <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 p-2" key={`${line.label}-${index}`}>
+                    <span><strong className="block text-coal">{line.label}</strong>{line.detail && <span className="text-stone-500">{line.detail}</span>}</span>
+                    <strong className="text-coal">{line.displayPrice}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="grid gap-2">
+            <p><strong className="text-coal">Schedule:</strong> {quoteRequest.preferredDate || "No preferred date"} {quoteRequest.preferredTime || ""}</p>
+            {quoteRequest.address && <p><strong className="text-coal">Address:</strong> {quoteRequest.address}</p>}
+            {quoteRequest.accessInstructions && <p><strong className="text-coal">Access:</strong> {quoteRequest.accessInstructions}</p>}
+            {quoteRequest.parkingNotes && <p><strong className="text-coal">Parking:</strong> {quoteRequest.parkingNotes}</p>}
+            {quoteRequest.quoteNotes && <p><strong className="text-coal">Customer notes:</strong> {quoteRequest.quoteNotes}</p>}
+          </div>
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function poundsToPennies(value) {
   return Math.max(0, Math.round((Number(value) || 0) * 100));
 }
@@ -771,8 +888,9 @@ export default function Dashboard() {
     setBookingForm((current) => {
       const currentDateTime = new Date(current.scheduledFor || new Date());
       const nextDateTime = new Date(date);
-      const hours = Number.isNaN(currentDateTime.getTime()) ? 9 : currentDateTime.getHours();
-      const minutes = Number.isNaN(currentDateTime.getTime()) ? 0 : currentDateTime.getMinutes();
+      const preserveSavedTime = Boolean(editingBookingId) && !Number.isNaN(currentDateTime.getTime());
+      const hours = preserveSavedTime ? currentDateTime.getHours() : 9;
+      const minutes = preserveSavedTime ? currentDateTime.getMinutes() : 0;
 
       nextDateTime.setHours(hours, minutes, 0, 0);
 
@@ -821,7 +939,15 @@ export default function Dashboard() {
       setBookingStatus("success");
       await loadBookingRecords({ keepBooking: data.booking });
       await loadAuditEvents();
-      showToast(editingBookingId ? "Booking updated." : "Booking saved to the calendar.");
+      showToast(
+        editingBookingId && payload.sendConfirmation && data.clientCommunication?.sent
+          ? "Booking updated on the calendar and client confirmation sent."
+          : editingBookingId && payload.sendConfirmation
+            ? "Booking updated on the calendar. Confirmation was not sent because local email is disabled."
+          : editingBookingId
+            ? "Booking updated on the calendar."
+            : "Booking saved to the calendar."
+      );
     } catch (requestError) {
       setBookingStatus("error");
       const message = getApiError(requestError, editingBookingId ? "Booking could not be updated." : "Booking could not be created.");
@@ -3122,12 +3248,13 @@ function BookingForm({ editingBookingId, employees, leads, form, status, onCance
               name="sendConfirmation"
               checked={form.sendConfirmation}
               onChange={onChange}
-              disabled={Boolean(editingBookingId)}
             />
-            Send client confirmation
+            {editingBookingId ? "Send updated client confirmation" : "Send client confirmation"}
           </label>
           {editingBookingId && (
-            <p className="text-sm font-semibold text-stone-500">Use the booking card buttons to send email or record phone confirmation.</p>
+            <p className="text-sm font-semibold text-stone-500">
+              Saves the new date and time to the calendar before sending the updated confirmation.
+            </p>
           )}
           {!editingBookingId && (
             <p className="text-sm font-semibold text-stone-500">
@@ -3646,6 +3773,7 @@ function QuoteReviewPanel({
                     {quoteRequest.accessInstructions && <p className="mt-1">Access: {quoteRequest.accessInstructions}</p>}
                     {quoteRequest.parkingNotes && <p className="mt-1">Parking: {quoteRequest.parkingNotes}</p>}
                     {quoteRequest.quoteNotes && <p className="mt-1">Notes: {quoteRequest.quoteNotes}</p>}
+                    <QuoteRequestBreakdown pricing={pricing} quoteRequest={quoteRequest} />
                   </td>
                   <td className="px-4 py-4">
                     <OwnershipBadge record={quoteRequest} users={users} />

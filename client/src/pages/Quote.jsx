@@ -125,7 +125,7 @@ const initialForm = {
   linenSets: 1,
   addOnAreas: 1,
   preferredDate: "",
-  preferredTime: "",
+  preferredTime: "09:00",
   address: "",
   accessInstructions: "",
   parkingNotes: "",
