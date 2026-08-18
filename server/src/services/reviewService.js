@@ -5,7 +5,7 @@ import Review from "../models/Review.js";
 import * as fileStore from "./fileStore.js";
 
 const FIELD_MASK = "id,displayName,rating,userRatingCount,reviews";
-const PROFILE_FIELD_MASK = "id,displayName";
+const PROFILE_FIELD_MASK = "id,displayName,rating,userRatingCount";
 const LEGACY_FIELDS = "name,rating,user_ratings_total,reviews,url";
 
 function getGoogleConfigDiagnostics() {
@@ -41,15 +41,11 @@ function toPublicReview(review) {
   };
 }
 
-export async function readCachedReviews(placeId = env.google.placeId) {
-  let reviewPlaceId = placeId;
+export async function readCachedReviews(placeId) {
   const businessConnection = useFileDatabase()
     ? null
     : await GoogleBusinessConnection.findOne({ provider: "google_business_profile" });
-
-  if (!reviewPlaceId) {
-    reviewPlaceId = businessConnection?.placeId || businessConnection?.locationName;
-  }
+  const reviewPlaceId = placeId || businessConnection?.placeId || businessConnection?.locationName || env.google.placeId;
 
   if (!reviewPlaceId) {
     return {
@@ -124,7 +120,11 @@ function createGoogleApiError(source, status, detail) {
 }
 
 export async function getReviews({ forceRefresh = false } = {}) {
-  const { placeId, placesApiKey } = env.google;
+  const businessConnection = useFileDatabase()
+    ? null
+    : await GoogleBusinessConnection.findOne({ provider: "google_business_profile" });
+  const placeId = businessConnection?.placeId || env.google.placeId;
+  const { placesApiKey } = env.google;
 
   if (!placeId || !placesApiKey) {
     return readCachedReviews(placeId);
@@ -139,7 +139,7 @@ export async function getReviews({ forceRefresh = false } = {}) {
   }
 
   try {
-    return await fetchAndCacheReviews();
+    return await fetchAndCacheReviews({ placeId, placesApiKey });
   } catch (error) {
     console.warn("Google reviews refresh failed", {
       ...getGoogleConfigDiagnostics(),
@@ -162,9 +162,23 @@ export async function getReviews({ forceRefresh = false } = {}) {
   }
 }
 
-export async function fetchAndCacheReviews() {
+export async function fetchAndCacheReviews({
+  placeId = env.google.placeId,
+  placesApiKey = env.google.placesApiKey
+} = {}) {
   try {
-    return await fetchAndCacheReviewsFromPlacesNew();
+    const reviews = await fetchAndCacheReviewsFromPlacesNew({ placeId, placesApiKey });
+
+    if ((reviews.reviews || []).length > 0 || !Number(reviews.meta?.userRatingCount)) {
+      return reviews;
+    }
+
+    try {
+      const legacyReviews = await fetchAndCacheReviewsFromLegacyPlaces({ placeId, placesApiKey });
+      return (legacyReviews.reviews || []).length > 0 ? legacyReviews : reviews;
+    } catch {
+      return reviews;
+    }
   } catch (error) {
     console.warn("Google Places New reviews request failed, trying legacy Place Details", {
       ...getGoogleConfigDiagnostics(),
@@ -174,23 +188,21 @@ export async function fetchAndCacheReviews() {
     });
 
     try {
-      return await fetchPlaceProfileFromPlacesNew(error);
-    } catch (profileError) {
-      console.warn("Google Places New profile request failed, trying legacy Place Details", {
+      return await fetchAndCacheReviewsFromLegacyPlaces({ placeId, placesApiKey });
+    } catch (legacyError) {
+      console.warn("Google Place Details legacy request failed, trying the public place profile", {
         ...getGoogleConfigDiagnostics(),
-        statusCode: profileError.statusCode,
-        googleStatusCode: profileError.googleStatusCode,
-        message: profileError.message
+        statusCode: legacyError.statusCode,
+        googleStatusCode: legacyError.googleStatusCode,
+        message: legacyError.message
       });
 
-      return fetchAndCacheReviewsFromLegacyPlaces();
+      return fetchPlaceProfileFromPlacesNew(error, { placeId, placesApiKey });
     }
   }
 }
 
-async function fetchAndCacheReviewsFromPlacesNew() {
-  const { placeId, placesApiKey } = env.google;
-
+async function fetchAndCacheReviewsFromPlacesNew({ placeId, placesApiKey }) {
   if (!placeId || !placesApiKey) {
     return readCachedReviews(placeId);
   }
@@ -246,9 +258,7 @@ async function fetchAndCacheReviewsFromPlacesNew() {
   };
 }
 
-async function fetchPlaceProfileFromPlacesNew(originalError) {
-  const { placeId, placesApiKey } = env.google;
-
+async function fetchPlaceProfileFromPlacesNew(originalError, { placeId, placesApiKey }) {
   if (!placeId || !placesApiKey) {
     return readCachedReviews(placeId);
   }
@@ -279,6 +289,8 @@ async function fetchPlaceProfileFromPlacesNew(originalError) {
       ...cached.meta,
       source: "google-profile",
       placeName: place.displayName?.text,
+      averageRating: place.rating,
+      userRatingCount: place.userRatingCount,
       fetchedAt,
       refreshNotice: "Google profile connected. Public review comments are not available from Google yet.",
       refreshStatusCode: originalError.googleStatusCode || originalError.statusCode
@@ -286,9 +298,7 @@ async function fetchPlaceProfileFromPlacesNew(originalError) {
   };
 }
 
-async function fetchAndCacheReviewsFromLegacyPlaces() {
-  const { placeId, placesApiKey } = env.google;
-
+async function fetchAndCacheReviewsFromLegacyPlaces({ placeId, placesApiKey }) {
   if (!placeId || !placesApiKey) {
     return readCachedReviews(placeId);
   }

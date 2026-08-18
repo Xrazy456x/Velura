@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { useFileDatabase } from "../config/database.js";
 import { env } from "../config/env.js";
 import GoogleBusinessConnection from "../models/GoogleBusinessConnection.js";
-import { cacheReviewRecords, readCachedReviews } from "./reviewService.js";
+import { cacheReviewRecords, fetchAndCacheReviews, readCachedReviews } from "./reviewService.js";
 
 const PROVIDER = "google_business_profile";
 const BUSINESS_SCOPE = "https://www.googleapis.com/auth/business.manage";
@@ -127,7 +127,34 @@ async function googleJson(url, accessToken, options = {}) {
   });
 
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : {};
+  let payload = {};
+
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      const contentType = response.headers.get("content-type") || "an unknown content type";
+
+      if (!response.ok) {
+        const reviewApiUnavailable =
+          response.status === 404 && new URL(url).hostname === "mybusiness.googleapis.com";
+
+        throw createGoogleBusinessError(
+          reviewApiUnavailable
+            ? "Google My Business API review access is not enabled or approved for this Google Cloud project."
+            : `Google Business Profile returned status ${response.status} as ${contentType} instead of JSON.`,
+          502,
+          response.status
+        );
+      }
+
+      throw createGoogleBusinessError(
+        `Google Business Profile returned ${contentType} instead of JSON.`,
+        502,
+        response.status
+      );
+    }
+  }
 
   if (!response.ok) {
     throw createGoogleBusinessError(
@@ -422,7 +449,53 @@ export async function syncGoogleBusinessReviews() {
     url.searchParams.set("pageSize", "50");
     url.searchParams.set("orderBy", "updateTime desc");
 
-    const payload = await googleJson(url, accessToken);
+    let payload;
+    try {
+      payload = await googleJson(url, accessToken);
+    } catch (businessProfileError) {
+      const fallbackPlaceId = connection.placeId || env.google.placeId;
+
+      if (!fallbackPlaceId || !env.google.placesApiKey) {
+        throw businessProfileError;
+      }
+
+      const fallback = await fetchAndCacheReviews({
+        placeId: fallbackPlaceId,
+        placesApiKey: env.google.placesApiKey
+      });
+      const hasFallbackSummary = [fallback.meta?.averageRating, fallback.meta?.userRatingCount].some(
+        (value) => value !== undefined && value !== null && Number.isFinite(Number(value))
+      );
+      const hasFallbackData =
+        (fallback.reviews || []).length > 0 ||
+        hasFallbackSummary;
+
+      if (!hasFallbackData) {
+        throw businessProfileError;
+      }
+
+      const updatedConnection = await GoogleBusinessConnection.findOneAndUpdate(
+        { provider: PROVIDER },
+        {
+          averageRating: fallback.meta?.averageRating,
+          totalReviewCount: fallback.meta?.userRatingCount,
+          lastSyncedAt: fallback.meta?.fetchedAt || new Date(),
+          lastSyncError: ""
+        },
+        { new: true }
+      );
+
+      return {
+        ...fallback,
+        meta: {
+          ...fallback.meta,
+          source: "google-places-fallback",
+          placeName: updatedConnection.locationTitle,
+          businessProfile: publicConnection(updatedConnection)
+        }
+      };
+    }
+
     const updatedConnection = await GoogleBusinessConnection.findOneAndUpdate(
       { provider: PROVIDER },
       {
