@@ -466,9 +466,11 @@ export async function syncGoogleBusinessReviews() {
       const hasFallbackSummary = [fallback.meta?.averageRating, fallback.meta?.userRatingCount].some(
         (value) => value !== undefined && value !== null && Number.isFinite(Number(value))
       );
+      const hasAuthoritativeEmptyResult = ["google", "google-legacy"].includes(fallback.meta?.source);
       const hasFallbackData =
         (fallback.reviews || []).length > 0 ||
-        hasFallbackSummary;
+        hasFallbackSummary ||
+        hasAuthoritativeEmptyResult;
 
       if (!hasFallbackData) {
         throw businessProfileError;
@@ -478,7 +480,7 @@ export async function syncGoogleBusinessReviews() {
         { provider: PROVIDER },
         {
           averageRating: fallback.meta?.averageRating,
-          totalReviewCount: fallback.meta?.userRatingCount,
+          totalReviewCount: fallback.meta?.userRatingCount ?? (fallback.reviews || []).length,
           lastSyncedAt: fallback.meta?.fetchedAt || new Date(),
           lastSyncError: ""
         },
