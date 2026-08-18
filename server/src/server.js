@@ -6,8 +6,12 @@ async function bootstrap() {
   try {
     await connectDatabase();
 
-    const server = app.listen(env.port, () => {
-      console.log(`API server listening on http://localhost:${env.port}`);
+    const server = app.listen(env.port, env.host, () => {
+      const displayHost = env.host || "localhost";
+      console.log(`API server listening on http://${displayHost}:${env.port}`);
+      if (env.localOnly) {
+        console.log("Local-only mode: file database enabled and outbound integrations disabled.");
+      }
     });
 
     function shutdown(signal) {

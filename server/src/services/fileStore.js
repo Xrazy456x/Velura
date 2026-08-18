@@ -339,6 +339,8 @@ export async function createQuoteRequest(payload) {
       quoteSentAt: payload.quoteSentAt || null,
       deliveryStatus: payload.deliveryStatus || "not_applicable",
       deliveryError: payload.deliveryError || "",
+      deletedAt: null,
+      deletedBy: null,
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -350,23 +352,63 @@ export async function createQuoteRequest(payload) {
 
 export async function listQuoteRequests() {
   const database = await readDatabase();
-  return clone(sortNewest(database.quoteRequests));
+  return clone(sortNewest(database.quoteRequests.filter((quoteRequest) => !quoteRequest.deletedAt)));
+}
+
+export async function listDeletedQuoteRequests() {
+  const database = await readDatabase();
+  return clone(
+    [...database.quoteRequests]
+      .filter((quoteRequest) => quoteRequest.deletedAt)
+      .sort((a, b) => new Date(b.deletedAt || 0) - new Date(a.deletedAt || 0))
+  );
 }
 
 export async function findQuoteRequestById(id) {
   const database = await readDatabase();
-  return clone(database.quoteRequests.find((quoteRequest) => quoteRequest._id === id) || null);
+  return clone(database.quoteRequests.find((quoteRequest) => quoteRequest._id === id && !quoteRequest.deletedAt) || null);
 }
 
 export async function updateQuoteRequest(id, updates) {
   return updateDatabase((database) => {
-    const quoteRequest = database.quoteRequests.find((item) => item._id === id);
+    const quoteRequest = database.quoteRequests.find((item) => item._id === id && !item.deletedAt);
 
     if (!quoteRequest) {
       return null;
     }
 
     Object.assign(quoteRequest, updates, { updatedAt: now() });
+    return quoteRequest;
+  });
+}
+
+export async function softDeleteQuoteRequest(id, deletedBy = null) {
+  return updateDatabase((database) => {
+    const quoteRequest = database.quoteRequests.find((item) => item._id === id && !item.deletedAt);
+    if (!quoteRequest) return null;
+    quoteRequest.deletedAt = now();
+    quoteRequest.deletedBy = deletedBy;
+    quoteRequest.updatedAt = now();
+    return quoteRequest;
+  });
+}
+
+export async function restoreQuoteRequest(id) {
+  return updateDatabase((database) => {
+    const quoteRequest = database.quoteRequests.find((item) => item._id === id && item.deletedAt);
+    if (!quoteRequest) return null;
+    quoteRequest.deletedAt = null;
+    quoteRequest.deletedBy = null;
+    quoteRequest.updatedAt = now();
+    return quoteRequest;
+  });
+}
+
+export async function permanentlyDeleteQuoteRequest(id) {
+  return updateDatabase((database) => {
+    const index = database.quoteRequests.findIndex((item) => item._id === id && item.deletedAt);
+    if (index === -1) return null;
+    const [quoteRequest] = database.quoteRequests.splice(index, 1);
     return quoteRequest;
   });
 }

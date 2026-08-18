@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
-import About from "./pages/About.jsx";
 import Contact from "./pages/Contact.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Home from "./pages/Home.jsx";
@@ -17,7 +16,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Home />} />
-        <Route path="/about" element={<About />} />
+        <Route path="/about" element={<Navigate to="/services" replace />} />
         <Route path="/services" element={<Services />} />
         <Route path="/quote" element={<Quote />} />
         <Route path="/contact" element={<Contact />} />
@@ -35,7 +34,7 @@ export default function App() {
         />
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="/portal" element={<Navigate to="/" replace />} />
-        <Route path="/portal/about" element={<Navigate to="/about" replace />} />
+        <Route path="/portal/about" element={<Navigate to="/services" replace />} />
         <Route path="/portal/services" element={<Navigate to="/services" replace />} />
         <Route path="/portal/quote" element={<Navigate to="/quote" replace />} />
         <Route path="/portal/contact" element={<Navigate to="/contact" replace />} />

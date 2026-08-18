@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon --ignore data src/server.js",
+    "dev:local": "LOCAL_ONLY=true DATABASE_DRIVER=file nodemon --ignore data src/server.js",
     "start": "node src/server.js",
     "seed:admin": "node src/scripts/seedAdmin.js",
     "migrate:file-to-mongo": "node src/scripts/migrateFileToMongo.js",

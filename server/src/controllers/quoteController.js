@@ -454,17 +454,89 @@ export const submitQuoteRequest = asyncHandler(async (req, res) => {
 
 export const listQuoteRequests = asyncHandler(async (req, res) => {
   if (useFileDatabase()) {
-    const quoteRequests = await fileStore.listQuoteRequests();
-    return res.json({ quoteRequests });
+    const [quoteRequests, deletedQuoteRequests] = await Promise.all([
+      fileStore.listQuoteRequests(),
+      fileStore.listDeletedQuoteRequests()
+    ]);
+    return res.json({ quoteRequests, deletedQuoteRequests });
   }
 
-  const quoteRequests = await QuoteRequest.find()
-    .sort({ createdAt: -1 })
-    .limit(200)
-    .populate("assignedManager", "name email")
-    .populate("lastClientContactedBy", "name email")
-    .lean();
-  return res.json({ quoteRequests });
+  const [quoteRequests, deletedQuoteRequests] = await Promise.all([
+    QuoteRequest.find({ $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] })
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate("assignedManager", "name email")
+      .populate("lastClientContactedBy", "name email")
+      .lean(),
+    QuoteRequest.find({ deletedAt: { $exists: true, $ne: null } })
+      .sort({ deletedAt: -1 })
+      .limit(100)
+      .populate("deletedBy", "name email")
+      .lean()
+  ]);
+  return res.json({ quoteRequests, deletedQuoteRequests });
+});
+
+export const deleteQuoteRequest = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const quoteRequest = useFileDatabase()
+    ? await fileStore.softDeleteQuoteRequest(id, req.user?._id || null)
+    : await QuoteRequest.findOneAndUpdate(
+        { _id: id, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] },
+        { $set: { deletedAt: new Date(), deletedBy: req.user?._id || null } },
+        { new: true, runValidators: true }
+      ).populate("deletedBy", "name email");
+
+  if (!quoteRequest) return res.status(404).json({ message: "Quote request not found." });
+
+  await recordAuditEvent(req, {
+    action: "quote_request.deleted",
+    resource: "quoteRequest",
+    resourceId: quoteRequest._id,
+    summary: `Quote ${quoteRequest.quoteReference} moved to recently deleted.`,
+    metadata: { quoteReference: quoteRequest.quoteReference, clientName: quoteRequest.clientName }
+  });
+  return res.json({ quoteRequest });
+});
+
+export const restoreQuoteRequest = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const quoteRequest = useFileDatabase()
+    ? await fileStore.restoreQuoteRequest(id)
+    : await QuoteRequest.findOneAndUpdate(
+        { _id: id, deletedAt: { $exists: true, $ne: null } },
+        { $set: { deletedAt: null, deletedBy: null } },
+        { new: true, runValidators: true }
+      );
+
+  if (!quoteRequest) return res.status(404).json({ message: "Deleted quote request not found." });
+
+  await recordAuditEvent(req, {
+    action: "quote_request.restored",
+    resource: "quoteRequest",
+    resourceId: quoteRequest._id,
+    summary: `Quote ${quoteRequest.quoteReference} restored.`,
+    metadata: { quoteReference: quoteRequest.quoteReference, clientName: quoteRequest.clientName }
+  });
+  return res.json({ quoteRequest });
+});
+
+export const permanentlyDeleteQuoteRequest = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const quoteRequest = useFileDatabase()
+    ? await fileStore.permanentlyDeleteQuoteRequest(id)
+    : await QuoteRequest.findOneAndDelete({ _id: id, deletedAt: { $exists: true, $ne: null } });
+
+  if (!quoteRequest) return res.status(404).json({ message: "Deleted quote request not found." });
+
+  await recordAuditEvent(req, {
+    action: "quote_request.permanently_deleted",
+    resource: "quoteRequest",
+    resourceId: quoteRequest._id,
+    summary: `Quote ${quoteRequest.quoteReference} permanently deleted.`,
+    metadata: { quoteReference: quoteRequest.quoteReference, clientName: quoteRequest.clientName }
+  });
+  return res.json({ message: "Quote request permanently deleted." });
 });
 
 export const updateQuoteRequestStatus = asyncHandler(async (req, res) => {

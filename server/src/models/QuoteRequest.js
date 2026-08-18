@@ -124,6 +124,16 @@ const quoteRequestSchema = new mongoose.Schema(
       trim: true,
       maxlength: 500,
       default: ""
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
     }
   },
   { timestamps: true }

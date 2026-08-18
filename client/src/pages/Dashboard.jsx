@@ -559,6 +559,7 @@ export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
   const [pricing, setPricing] = useState(null);
   const [quoteRequests, setQuoteRequests] = useState([]);
+  const [deletedQuoteRequests, setDeletedQuoteRequests] = useState([]);
   const [googleReviews, setGoogleReviews] = useState([]);
   const [reviewsMeta, setReviewsMeta] = useState(null);
   const [googleBusinessStatus, setGoogleBusinessStatus] = useState(null);
@@ -701,7 +702,10 @@ export default function Dashboard() {
 
       const results = await Promise.allSettled([
         apiClient.get("/bookings").then((response) => setBookings(response.data.bookings || [])),
-        apiClient.get("/quote/requests").then((response) => setQuoteRequests(response.data.quoteRequests || [])),
+        apiClient.get("/quote/requests").then((response) => {
+          setQuoteRequests(response.data.quoteRequests || []);
+          setDeletedQuoteRequests(response.data.deletedQuoteRequests || []);
+        }),
         apiClient.get("/employees").then((response) => setEmployees(response.data.employees || [])),
         apiClient.get("/users").then((response) => setUsers(response.data.users || [])),
         apiClient.get("/leads").then((response) => {
@@ -1505,6 +1509,68 @@ export default function Dashboard() {
     }
   }
 
+  async function deleteQuoteRequest(quoteRequestId) {
+    if (!window.confirm("Move this quote to Recently deleted? You can restore it if this was a mistake.")) return;
+    const previous = quoteRequests;
+    const previousDeleted = deletedQuoteRequests;
+    const target = quoteRequests.find((quoteRequest) => quoteRequest._id === quoteRequestId);
+    setQuoteAction(`delete:${quoteRequestId}`);
+    setQuoteRequests((current) => current.filter((quoteRequest) => quoteRequest._id !== quoteRequestId));
+    if (target) setDeletedQuoteRequests((current) => [{ ...target, deletedAt: new Date().toISOString() }, ...current]);
+
+    try {
+      const { data } = await apiClient.delete(`/quote/requests/${quoteRequestId}`);
+      setDeletedQuoteRequests((current) => [data.quoteRequest, ...current.filter((item) => item._id !== quoteRequestId)]);
+      showToast(`Quote ${data.quoteRequest.quoteReference} moved to Recently deleted.`);
+      void loadAuditEvents();
+    } catch (requestError) {
+      setQuoteRequests(previous);
+      setDeletedQuoteRequests(previousDeleted);
+      showToast(getApiError(requestError, "Quote could not be deleted."), "error");
+    } finally {
+      setQuoteAction("idle");
+    }
+  }
+
+  async function restoreQuoteRequest(quoteRequestId) {
+    const previous = quoteRequests;
+    const previousDeleted = deletedQuoteRequests;
+    const target = deletedQuoteRequests.find((quoteRequest) => quoteRequest._id === quoteRequestId);
+    setQuoteAction(`restore:${quoteRequestId}`);
+    setDeletedQuoteRequests((current) => current.filter((quoteRequest) => quoteRequest._id !== quoteRequestId));
+    if (target) setQuoteRequests((current) => [{ ...target, deletedAt: null, deletedBy: null }, ...current]);
+
+    try {
+      const { data } = await apiClient.post(`/quote/requests/${quoteRequestId}/restore`);
+      setQuoteRequests((current) => [data.quoteRequest, ...current.filter((item) => item._id !== quoteRequestId)]);
+      showToast(`Quote ${data.quoteRequest.quoteReference} restored.`);
+      void loadAuditEvents();
+    } catch (requestError) {
+      setQuoteRequests(previous);
+      setDeletedQuoteRequests(previousDeleted);
+      showToast(getApiError(requestError, "Quote could not be restored."), "error");
+    } finally {
+      setQuoteAction("idle");
+    }
+  }
+
+  async function permanentlyDeleteQuoteRequest(quoteRequestId) {
+    if (!window.confirm("Permanently delete this quote? This cannot be undone.")) return;
+    const previous = deletedQuoteRequests;
+    setQuoteAction(`permanent:${quoteRequestId}`);
+    setDeletedQuoteRequests((current) => current.filter((quoteRequest) => quoteRequest._id !== quoteRequestId));
+    try {
+      await apiClient.delete(`/quote/requests/${quoteRequestId}/permanent`);
+      showToast("Quote permanently deleted.");
+      void loadAuditEvents();
+    } catch (requestError) {
+      setDeletedQuoteRequests(previous);
+      showToast(getApiError(requestError, "Quote could not be permanently deleted."), "error");
+    } finally {
+      setQuoteAction("idle");
+    }
+  }
+
   async function sendQuotePhotoRequest(quoteRequestId) {
     setError("");
     setQuoteAction(`photos:${quoteRequestId}`);
@@ -1706,13 +1772,17 @@ export default function Dashboard() {
             <QuoteReviewPanel
               actionStatus={quoteAction}
               currentUser={user}
+              deletedQuoteRequests={deletedQuoteRequests}
               pricing={pricing}
               quoteRequests={quoteRequests}
               users={users}
               onCreateCustomQuote={createCustomQuote}
               onCreateBooking={startBookingFromQuote}
+              onDelete={deleteQuoteRequest}
               onOwnershipChange={updateQuoteOwnership}
+              onPermanentDelete={permanentlyDeleteQuoteRequest}
               onPhotoRequest={sendQuotePhotoRequest}
+              onRestore={restoreQuoteRequest}
               onSendCustomQuote={resendCustomQuote}
               onStatusChange={updateQuoteRequestStatus}
             />
@@ -3662,20 +3732,27 @@ function CustomQuoteComposer({ actionStatus, onCancel, onCreate, pricing }) {
 function QuoteReviewPanel({
   actionStatus,
   currentUser,
+  deletedQuoteRequests,
   pricing,
   quoteRequests,
   users,
   onCreateCustomQuote,
   onCreateBooking,
+  onDelete,
   onOwnershipChange,
+  onPermanentDelete,
   onPhotoRequest,
+  onRestore,
   onSendCustomQuote,
   onStatusChange
 }) {
   const [activeQuoteFilter, setActiveQuoteFilter] = useState("active");
+  const [showingDeleted, setShowingDeleted] = useState(false);
   const [showCustomQuote, setShowCustomQuote] = useState(false);
   const activeFilter = quoteFilterTabs.find((filter) => filter.key === activeQuoteFilter) || quoteFilterTabs[0];
-  const visibleQuoteRequests = quoteRequests.filter((quoteRequest) => activeFilter.statuses.includes(quoteRequest.status));
+  const visibleQuoteRequests = showingDeleted
+    ? deletedQuoteRequests
+    : quoteRequests.filter((quoteRequest) => activeFilter.statuses.includes(quoteRequest.status));
   const quoteCounts = quoteFilterTabs.reduce(
     (counts, filter) => ({
       ...counts,
@@ -3712,6 +3789,23 @@ function QuoteReviewPanel({
           <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-stone-500">
             The active queue shows quote requests that still need work. Booked and closed quotes stay archived here for audit and follow-up.
           </p>
+          <div className="mt-5 flex flex-wrap gap-2 border-b border-stone-200 pb-4">
+            <button
+              className={`rounded-lg px-3 py-2 text-xs font-extrabold ${!showingDeleted ? "bg-coal text-white" : "bg-mist text-stone-600"}`}
+              onClick={() => setShowingDeleted(false)}
+              type="button"
+            >
+              Active quotes ({quoteRequests.length})
+            </button>
+            <button
+              className={`rounded-lg px-3 py-2 text-xs font-extrabold ${showingDeleted ? "bg-coal text-white" : "bg-mist text-stone-600"}`}
+              onClick={() => setShowingDeleted(true)}
+              type="button"
+            >
+              Recently deleted ({deletedQuoteRequests.length})
+            </button>
+          </div>
+          {!showingDeleted && (
           <div className="mt-5 flex flex-wrap gap-2">
           {quoteFilterTabs.map((filter) => (
             <button
@@ -3726,6 +3820,7 @@ function QuoteReviewPanel({
             </button>
           ))}
           </div>
+          )}
         </div>
         <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
@@ -3787,7 +3882,10 @@ function QuoteReviewPanel({
                     )}
                   </td>
                   <td className="px-4 py-4">
-                    <select
+                    {showingDeleted ? (
+                      <StatusBadge value="deleted" />
+                    ) : (
+                      <select
                       className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-700"
                       value={quoteRequest.status}
                       onChange={(event) => onStatusChange(quoteRequest._id, event.target.value)}
@@ -3797,7 +3895,8 @@ function QuoteReviewPanel({
                           {quoteStatusLabel(status)}
                         </option>
                       ))}
-                    </select>
+                      </select>
+                    )}
                     {quoteRequest.photoRequestSentAt && (
                       <p className="mt-2 text-xs font-bold text-stone-500">
                         Photos requested {new Date(quoteRequest.photoRequestSentAt).toLocaleDateString("en-GB")}
@@ -3810,6 +3909,28 @@ function QuoteReviewPanel({
                     )}
                   </td>
                   <td className="px-4 py-4">
+                    {showingDeleted ? (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="button-secondary whitespace-nowrap px-3 py-2"
+                          type="button"
+                          onClick={() => onRestore(quoteRequest._id)}
+                          disabled={actionStatus === `restore:${quoteRequest._id}`}
+                        >
+                          {actionStatus === `restore:${quoteRequest._id}` ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+                          Restore
+                        </button>
+                        <button
+                          className="button-secondary whitespace-nowrap px-3 py-2 text-rose-700"
+                          type="button"
+                          onClick={() => onPermanentDelete(quoteRequest._id)}
+                          disabled={actionStatus === `permanent:${quoteRequest._id}`}
+                        >
+                          {actionStatus === `permanent:${quoteRequest._id}` ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                          Delete forever
+                        </button>
+                      </div>
+                    ) : (
                     <div className="flex flex-wrap gap-2">
                       <button
                         className="button-secondary whitespace-nowrap px-3 py-2"
@@ -3861,13 +3982,28 @@ function QuoteReviewPanel({
                         <CalendarCheck size={16} aria-hidden="true" />
                         Create booking
                       </button>
+                      <button
+                        className="button-secondary whitespace-nowrap px-3 py-2 text-rose-700"
+                        type="button"
+                        onClick={() => onDelete(quoteRequest._id)}
+                        disabled={actionStatus === `delete:${quoteRequest._id}`}
+                      >
+                        {actionStatus === `delete:${quoteRequest._id}` ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                        Delete
+                      </button>
                     </div>
+                    )}
                   </td>
-                  <td className="px-4 py-4 text-stone-500">{new Date(quoteRequest.createdAt).toLocaleDateString()}</td>
+                  <td className="px-4 py-4 text-stone-500">
+                    {new Date(showingDeleted ? quoteRequest.deletedAt : quoteRequest.createdAt).toLocaleDateString()}
+                    {showingDeleted && quoteRequest.deletedBy?.name && <p className="mt-1 text-xs">by {quoteRequest.deletedBy.name}</p>}
+                  </td>
                 </tr>
               );
             })}
-            {visibleQuoteRequests.length === 0 && <EmptyRow label={`No ${activeFilter.label.toLowerCase()} quote requests.`} columns={8} />}
+            {visibleQuoteRequests.length === 0 && (
+              <EmptyRow label={showingDeleted ? "No recently deleted quote requests." : `No ${activeFilter.label.toLowerCase()} quote requests.`} columns={8} />
+            )}
           </tbody>
         </table>
         </div>

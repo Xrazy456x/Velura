@@ -61,6 +61,21 @@ This uses Node.js, Express, MongoDB, Mongoose, React, Vite, and Tailwind CSS bec
 
 ## Local Setup
 
+### Safe local-only editing
+
+To edit and preview the website without publishing anything, run:
+
+```bash
+npm run dev:local
+```
+
+Then open `http://127.0.0.1:5173`. This mode is available only on your computer,
+uses `server/data/dev-db.json` instead of the live database, and disables outbound
+email, SMS, Google Reviews, and Google Business connections. It does not run any
+deployment command or change the live website.
+
+Stop the local site with `Ctrl+C` in the terminal.
+
 1. Install Node.js 20+ and MongoDB locally, or create a MongoDB Atlas database.
 
 2. Install dependencies from the repo root:
@@ -189,6 +204,7 @@ Useful official docs:
 
 ```bash
 npm run dev          # Run frontend and backend together
+npm run dev:local    # Safe localhost-only editing with local data/integrations off
 npm run build        # Build frontend for production
 npm run check        # Build frontend and syntax-check backend files
 npm run start        # Start backend in production mode

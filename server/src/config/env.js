@@ -2,6 +2,8 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+const localOnly = process.env.LOCAL_ONLY === "true";
+
 function normalizeEmailFrom(value) {
   const sender = (value || "Velura Services <bookings@veluraservices.com>").trim();
 
@@ -32,7 +34,14 @@ function getClientUrls() {
     .filter(Boolean);
 
   if (process.env.NODE_ENV !== "production") {
-    for (const localUrl of ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"]) {
+    for (const localUrl of [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://localhost:5175",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:5174",
+      "http://127.0.0.1:5175"
+    ]) {
       if (!urls.includes(localUrl)) {
         urls.push(localUrl);
       }
@@ -44,6 +53,8 @@ function getClientUrls() {
 
 export const env = {
   nodeEnv: process.env.NODE_ENV || "development",
+  localOnly,
+  host: localOnly ? "127.0.0.1" : process.env.HOST,
   port: Number(process.env.PORT || 5001),
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
   clientUrls: getClientUrls(),
@@ -57,31 +68,31 @@ export const env = {
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean),
   smtp: {
-    host: process.env.SMTP_HOST,
+    host: localOnly ? undefined : process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
     requireTls: process.env.SMTP_REQUIRE_TLS !== "false",
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: localOnly ? undefined : process.env.SMTP_USER,
+    pass: localOnly ? undefined : process.env.SMTP_PASS,
     from: normalizeEmailFrom(process.env.EMAIL_FROM || process.env.SMTP_FROM),
     contactTo: process.env.CONTACT_TO || process.env.SMTP_USER || "bookings@veluraservices.com"
   },
   resend: {
-    apiKey: process.env.RESEND_API_KEY
+    apiKey: localOnly ? undefined : process.env.RESEND_API_KEY
   },
   twilio: {
-    accountSid: process.env.TWILIO_ACCOUNT_SID,
-    authToken: process.env.TWILIO_AUTH_TOKEN,
-    fromNumber: process.env.TWILIO_FROM_NUMBER
+    accountSid: localOnly ? undefined : process.env.TWILIO_ACCOUNT_SID,
+    authToken: localOnly ? undefined : process.env.TWILIO_AUTH_TOKEN,
+    fromNumber: localOnly ? undefined : process.env.TWILIO_FROM_NUMBER
   },
   google: {
-    placesApiKey: cleanOptionalEnv(process.env.GOOGLE_PLACES_API_KEY),
-    placeId: cleanOptionalEnv(process.env.GOOGLE_PLACE_ID),
+    placesApiKey: localOnly ? undefined : cleanOptionalEnv(process.env.GOOGLE_PLACES_API_KEY),
+    placeId: localOnly ? undefined : cleanOptionalEnv(process.env.GOOGLE_PLACE_ID),
     reviewsCacheTtlMinutes: Number(process.env.GOOGLE_REVIEWS_CACHE_TTL_MINUTES || 720),
     businessProfile: {
-      clientId: cleanOptionalEnv(process.env.GOOGLE_BUSINESS_CLIENT_ID),
-      clientSecret: cleanOptionalEnv(process.env.GOOGLE_BUSINESS_CLIENT_SECRET),
-      redirectUri: cleanOptionalEnv(process.env.GOOGLE_BUSINESS_REDIRECT_URI),
-      tokenSecret: cleanOptionalEnv(process.env.GOOGLE_BUSINESS_TOKEN_SECRET)
+      clientId: localOnly ? undefined : cleanOptionalEnv(process.env.GOOGLE_BUSINESS_CLIENT_ID),
+      clientSecret: localOnly ? undefined : cleanOptionalEnv(process.env.GOOGLE_BUSINESS_CLIENT_SECRET),
+      redirectUri: localOnly ? undefined : cleanOptionalEnv(process.env.GOOGLE_BUSINESS_REDIRECT_URI),
+      tokenSecret: localOnly ? undefined : cleanOptionalEnv(process.env.GOOGLE_BUSINESS_TOKEN_SECRET)
     }
   },
   auditLogRetentionDays: Number(process.env.AUDIT_LOG_RETENTION_DAYS || 2190)
