@@ -2,6 +2,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import PageHeader from "../components/PageHeader.jsx";
+import ReviewCarousel from "../components/ReviewCarousel.jsx";
 import { site } from "../config/site.js";
 
 const capabilityRows = [
@@ -80,6 +81,8 @@ export default function Services() {
           </div>
         </div>
       </section>
+
+      <ReviewCarousel />
 
       <section className="bg-mist">
         <div className="section-shell py-14 sm:py-18">
