@@ -139,7 +139,21 @@ export async function getReviews({ forceRefresh = false } = {}) {
   }
 
   try {
-    return await fetchAndCacheReviews({ placeId, placesApiKey });
+    const refreshed = await fetchAndCacheReviews({ placeId, placesApiKey });
+
+    if (businessConnection && ["google", "google-legacy"].includes(refreshed.meta?.source)) {
+      await GoogleBusinessConnection.findOneAndUpdate(
+        { provider: "google_business_profile" },
+        {
+          averageRating: refreshed.meta?.averageRating,
+          totalReviewCount: refreshed.meta?.userRatingCount ?? (refreshed.reviews || []).length,
+          lastSyncedAt: refreshed.meta?.fetchedAt || new Date(),
+          lastSyncError: ""
+        }
+      );
+    }
+
+    return refreshed;
   } catch (error) {
     console.warn("Google reviews refresh failed", {
       ...getGoogleConfigDiagnostics(),
